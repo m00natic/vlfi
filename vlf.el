@@ -147,6 +147,37 @@ You can customize the number of bytes to
     (vlf-mode)
     (display-buffer (current-buffer))))
 
+(defun dired-vlf ()
+  "In Dired, visit the file on this line in VLF mode."
+  (interactive)
+  (vlf (dired-get-file-for-visit)))
+
+(eval-after-load "dired" '(define-key dired-mode-map "V" 'dired-vlf))
+
+;;;; ChangeLog:
+
+;; 2012-11-29  Sam Steingold  <sds@gnu.org>
+;; 
+;; 	hook into dired
+;; 
+;; 2012-06-17  Chong Yidong  <cyd@gnu.org>
+;; 
+;; 	vlf.el: Improve commentary.
+;; 
+;; 2012-06-15  Sam Steingold  <sds@gnu.org>
+;; 
+;; 	fix vlf-change-batch-size binding
+;; 
+;; 2012-06-14  Sam Steingold  <sds@gnu.org>
+;; 
+;; 	complete rewrite by Sam Steingold
+;; 
+;; 2012-06-14  Sam Steingold  <sds@gnu.org>
+;; 
+;; 	View Large Files from Mathias Dahl
+;; 
+
+
 (provide 'vlf)
 
 ;;; vlf.el ends here
