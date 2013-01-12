@@ -2,10 +2,11 @@
 
 ;; Copyright (C) 2006, 2012  Free Software Foundation, Inc.
 
-;; Version: 0.2
+;; Version: 0.3
 ;; Keywords: large files, utilities
 ;; Authors: 2006 Mathias Dahl <mathias.dahl@gmail.com>
 ;;          2012 Sam Steingold <sds@gnu.org>
+;;          2013 Andrey Kotlarski <m00naticus@gmail.com>
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -57,6 +58,10 @@
     (define-key map [M-next] 'vlf-next-batch)
     (define-key map [M-prior] 'vlf-prev-batch)
     (define-key map (kbd "C-+") 'vlf-change-batch-size)
+    (define-key map (kbd "C--")
+      (lambda () "Decrease vlf batch size by factor of 2."
+	(interactive)
+	(vlf-change-batch-size t)))
     map)
   "Keymap for `vlf-mode'.")
 
@@ -71,22 +76,22 @@
 (defun vlf-change-batch-size (decrease)
   "Change the buffer-local value of `vlf-batch-size'.
 Normally, the value is doubled;
-with the prefix argument it is halved."
+with the prefix argument DECREASE it is halved."
   (interactive "P")
   (or (assq 'vlf-batch-size (buffer-local-variables))
       (error "%s is not local in this buffer" 'vlf-batch-size))
   (setq vlf-batch-size
-        (if decrease
-            (/ vlf-batch-size 2)
-            (* vlf-batch-size 2)))
+	(if decrease
+	    (/ vlf-batch-size 2)
+	  (* vlf-batch-size 2)))
   (vlf-update-buffer-name))
 
 (defun vlf-format-buffer-name ()
   "Return format for vlf buffer name."
   (format "%s(%s)[%d,%d](%d)"
-          (file-name-nondirectory buffer-file-name)
-          (file-size-human-readable vlf-file-size)
-          vlf-start-pos vlf-end-pos vlf-batch-size))
+	  (file-name-nondirectory buffer-file-name)
+	  (file-size-human-readable vlf-file-size)
+	  vlf-start-pos vlf-end-pos vlf-batch-size))
 
 (defun vlf-update-buffer-name ()
   "Update the current buffer name."
@@ -94,65 +99,91 @@ with the prefix argument it is halved."
 
 (defun vlf-next-batch (append)
   "Display the next batch of file data.
-Append to the existing buffer when the prefix argument is supplied."
-  (interactive "P")
-  (when (= vlf-end-pos vlf-file-size)
-    (error "Already at EOF"))
-  (let ((inhibit-read-only t)
-        (end (min vlf-file-size (+ vlf-end-pos vlf-batch-size))))
-    (goto-char (point-max))
-    ;; replacing `erase-buffer' with replace arg to `insert-file-contents'
-    ;; hangs emacs
-    (unless append (erase-buffer))
-    (insert-file-contents buffer-file-name nil vlf-end-pos end)
-    (unless append
-      (setq vlf-start-pos vlf-end-pos))
-    (setq vlf-end-pos end)
-    (set-buffer-modified-p nil)
-    (vlf-update-buffer-name)))
+When prefix argument is supplied and positive
+ jump over APPEND number of batches.
+When prefix argument is negative
+ append next APPEND number of batches to the existing buffer."
+  (interactive "p")
+  (let ((end (+ vlf-end-pos (* vlf-batch-size
+			       (abs append)))))
+    (when (< vlf-file-size end)		; re-check file size
+      (setq vlf-file-size (nth 7 (file-attributes buffer-file-name)))
+      (cond ((= vlf-end-pos vlf-file-size)
+	     (error "Already at EOF"))
+	    ((< vlf-file-size end)
+	     (setq end vlf-file-size))))
+    (let ((inhibit-read-only t)
+	  (do-append (< append 0)))
+      (if do-append
+	  (goto-char (point-max))
+	(setq vlf-start-pos (- end vlf-batch-size))
+	(erase-buffer))
+      (insert-file-contents buffer-file-name nil
+			    (if do-append
+				vlf-end-pos
+			      vlf-start-pos)
+			    end))
+    (setq vlf-end-pos end))
+  (set-buffer-modified-p nil)
+  (vlf-update-buffer-name))
 
 (defun vlf-prev-batch (prepend)
   "Display the previous batch of file data.
-Prepend to the existing buffer when the prefix argument is supplied."
-  (interactive "P")
-  (when (= vlf-start-pos 0)
-    (error "Already at BOF"))
+When prefix argument is supplied and positive
+ jump over PREPEND number of batches.
+When prefix argument is negative
+ append previous PREPEND number of batches to the existing buffer."
+  (interactive "p")
+  (if (zerop vlf-start-pos)
+      (error "Already at BOF"))
   (let ((inhibit-read-only t)
-        (start (max 0 (- vlf-start-pos vlf-batch-size))))
-    (goto-char (point-min))
-    (unless prepend (erase-buffer))
-    (insert-file-contents buffer-file-name nil start vlf-start-pos)
-    (unless prepend
-      (setq vlf-end-pos vlf-start-pos))
-    (setq vlf-start-pos start)
-    (set-buffer-modified-p nil)
-    (vlf-update-buffer-name)))
+	(start (max 0 (- vlf-start-pos (* vlf-batch-size
+					  (abs prepend)))))
+	(do-prepend (< prepend 0)))
+    (if do-prepend
+	(goto-char (point-min))
+      (setq vlf-end-pos (+ start vlf-batch-size))
+      (erase-buffer))
+    (insert-file-contents buffer-file-name nil start
+			  (if do-prepend
+			      vlf-start-pos
+			    vlf-end-pos))
+    (setq vlf-start-pos start))
+  (set-buffer-modified-p nil)
+  (vlf-update-buffer-name))
 
-(defun vlf (file)
+;;;###autoload
+(defun vlf (from-end file)
   "View a Large File in Emacs.
+With FROM-END prefix, view from the back.
 FILE is the file to open.
 Batches of the file data from FILE will be displayed in a
  read-only buffer.
 You can customize the number of bytes to
  display by customizing `vlf-batch-size'."
-  (interactive "fFile to open: ")
+  (interactive "P\nfFile to open: ")
   (with-current-buffer (generate-new-buffer "*vlf*")
     (setq buffer-file-name file
-          vlf-start-pos 0
-          vlf-end-pos vlf-batch-size
-          vlf-file-size (nth 7 (file-attributes file)))
+	  vlf-file-size (nth 7 (file-attributes file)))
+    (if from-end
+	(setq vlf-start-pos (max 0 (- vlf-file-size vlf-batch-size))
+	      vlf-end-pos vlf-file-size)
+      (setq vlf-start-pos 0
+	    vlf-end-pos (min vlf-batch-size vlf-file-size)))
     (vlf-update-buffer-name)
     (insert-file-contents buffer-file-name nil
-                          vlf-start-pos vlf-end-pos nil)
+			  vlf-start-pos vlf-end-pos)
     (vlf-mode)
     (display-buffer (current-buffer))))
 
-(defun dired-vlf ()
-  "In Dired, visit the file on this line in VLF mode."
-  (interactive)
-  (vlf (dired-get-file-for-visit)))
+(defun dired-vlf (from-end)
+  "In Dired, visit the file on this line in VLF mode.
+With FROM-END prefix, view from the back."
+  (interactive "P")
+  (vlf from-end (dired-get-file-for-visit)))
 
-(eval-after-load "dired" '(define-key dired-mode-map "V" 'dired-vlf))
+(eval-after-load "dired"
+  '(define-key dired-mode-map "V" 'dired-vlf))
 
 ;;;; ChangeLog:
 

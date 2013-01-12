@@ -1,3 +1,4 @@
 * View Large File
 
-An Emacs mode that allows viewing files in chunks.
+An Emacs mode that allows viewing files in chunks.  This is a fork
+that builds on the GNU ELPA vlf.el.
