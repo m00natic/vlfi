@@ -1,6 +1,6 @@
 ;;; vlf.el --- View Large Files
 
-;; Copyright (C) 2006, 2012  Free Software Foundation, Inc.
+;; Copyright (C) 2006, 2012, 2013  Free Software Foundation, Inc.
 
 ;; Version: 0.3
 ;; Keywords: large files, utilities
@@ -57,8 +57,8 @@
   (let ((map (make-sparse-keymap)))
     (define-key map [M-next] 'vlf-next-batch)
     (define-key map [M-prior] 'vlf-prev-batch)
-    (define-key map (kbd "C-+") 'vlf-change-batch-size)
-    (define-key map (kbd "C--")
+    (define-key map (kbd "M-+") 'vlf-change-batch-size)
+    (define-key map (kbd "M--")
       (lambda () "Decrease vlf batch size by factor of 2."
 	(interactive)
 	(vlf-change-batch-size t)))
@@ -174,7 +174,7 @@ You can customize the number of bytes to
     (insert-file-contents buffer-file-name nil
 			  vlf-start-pos vlf-end-pos)
     (vlf-mode)
-    (display-buffer (current-buffer))))
+    (switch-to-buffer (current-buffer))))
 
 (defun dired-vlf (from-end)
   "In Dired, visit the file on this line in VLF mode.
@@ -185,28 +185,53 @@ With FROM-END prefix, view from the back."
 (eval-after-load "dired"
   '(define-key dired-mode-map "V" 'dired-vlf))
 
+;;; use this to hijack `abort-if-file-too-large'
+;;;###autoload
+(defun vlf-if-file-too-large (size op-type filename)
+  "If file SIZE larger than `large-file-warning-threshold', \
+allow user to view file with `vlf', open it normally or abort.
+OP-TYPE specifies the file operation being performed over  FILENAME."
+  (when (and large-file-warning-threshold size
+	     (> size large-file-warning-threshold))
+    (let ((char nil))
+      (while (not (memq (setq char
+                              (read-event
+                               (propertize
+                                (format "File %s is large (%s): %s normally (o), %s with vlf (v) or abort (a)"
+                                        (file-name-nondirectory filename)
+                                        (file-size-human-readable size)
+                                        op-type op-type)
+                                'face 'minibuffer-prompt)))
+                        '(?o ?O ?v ?V ?a ?A))))
+      (cond ((memq char '(?o ?O)))
+            ((memq char '(?v ?V))
+             (vlf nil filename)
+             (error ""))
+            ((memq char '(?a ?A))
+             (error "Aborted"))))))
+
 ;;;; ChangeLog:
 
 ;; 2012-11-29  Sam Steingold  <sds@gnu.org>
-;; 
+;;
 ;; 	hook into dired
-;; 
+;;
 ;; 2012-06-17  Chong Yidong  <cyd@gnu.org>
-;; 
+;;
 ;; 	vlf.el: Improve commentary.
-;; 
+;;
 ;; 2012-06-15  Sam Steingold  <sds@gnu.org>
-;; 
+;;
 ;; 	fix vlf-change-batch-size binding
-;; 
+;;
 ;; 2012-06-14  Sam Steingold  <sds@gnu.org>
-;; 
+;;
 ;; 	complete rewrite by Sam Steingold
-;; 
+;;
 ;; 2012-06-14  Sam Steingold  <sds@gnu.org>
-;; 
+;;
 ;; 	View Large Files from Mathias Dahl
-;; 
+;;
 
 
 (provide 'vlf)
