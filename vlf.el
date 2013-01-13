@@ -1,4 +1,5 @@
 ;;; vlf.el --- View Large Files
+;;; -*- lexical-bind: t -*-
 
 ;; Copyright (C) 2006, 2012, 2013  Free Software Foundation, Inc.
 
@@ -192,24 +193,24 @@ With FROM-END prefix, view from the back."
   "If file SIZE larger than `large-file-warning-threshold', \
 allow user to view file with `vlf', open it normally or abort.
 OP-TYPE specifies the file operation being performed over FILENAME."
-  (when (and large-file-warning-threshold size
-	     (> size large-file-warning-threshold))
-    (let ((char nil))
-      (while (not (memq (setq char
-                              (read-event
-                               (propertize
-                                (format "File %s is large (%s): %s normally (o), %s with vlf (v) or abort (a)"
-                                        (file-name-nondirectory filename)
-                                        (file-size-human-readable size)
-                                        op-type op-type)
-                                'face 'minibuffer-prompt)))
-                        '(?o ?O ?v ?V ?a ?A))))
-      (cond ((memq char '(?o ?O)))
-            ((memq char '(?v ?V))
-             (vlf nil filename)
-             (error ""))
-            ((memq char '(?a ?A))
-             (error "Aborted"))))))
+  (and large-file-warning-threshold size
+       (> size large-file-warning-threshold)
+       (let ((char nil))
+         (while (not (memq (setq char
+                                 (read-event
+                                  (propertize
+                                   (format "File %s is large (%s): %s normally (o), %s with vlf (v) or abort (a)"
+                                           (file-name-nondirectory filename)
+                                           (file-size-human-readable size)
+                                           op-type op-type)
+                                   'face 'minibuffer-prompt)))
+                           '(?o ?O ?v ?V ?a ?A))))
+         (cond ((memq char '(?o ?O)))
+               ((memq char '(?v ?V))
+                (vlf nil filename)
+                (error ""))
+               ((memq char '(?a ?A))
+                (error "Aborted"))))))
 
 ;;; hijack `abort-if-file-too-large'
 ;;;###autoload
