@@ -176,19 +176,22 @@ You can customize the number of bytes to
     (vlf-mode)
     (switch-to-buffer (current-buffer))))
 
+;;;###autoload
 (defun dired-vlf (from-end)
   "In Dired, visit the file on this line in VLF mode.
 With FROM-END prefix, view from the back."
   (interactive "P")
   (vlf from-end (dired-get-file-for-visit)))
 
+;;;###autoload
 (eval-after-load "dired"
   '(define-key dired-mode-map "V" 'dired-vlf))
 
+;;;###autoload
 (defun vlf-if-file-too-large (size op-type filename)
   "If file SIZE larger than `large-file-warning-threshold', \
 allow user to view file with `vlf', open it normally or abort.
-OP-TYPE specifies the file operation being performed over  FILENAME."
+OP-TYPE specifies the file operation being performed over FILENAME."
   (when (and large-file-warning-threshold size
 	     (> size large-file-warning-threshold))
     (let ((char nil))
@@ -209,6 +212,7 @@ OP-TYPE specifies the file operation being performed over  FILENAME."
              (error "Aborted"))))))
 
 ;;; hijack `abort-if-file-too-large'
+;;;###autoload
 (fset 'abort-if-file-too-large 'vlf-if-file-too-large)
 
 (provide 'vlf)
