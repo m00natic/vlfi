@@ -10,5 +10,6 @@ When opening file, by default Emacs checks its size against
 To add vlf as an option in these cases:
 
 #+BEGIN_SRC emacs-lisp
-(fset 'abort-if-file-too-large 'vlf-if-file-too-large)
+(if (fboundp 'vlf-if-file-too-large)
+    (fset 'abort-if-file-too-large 'vlf-if-file-too-large))
 #+END_SRC
