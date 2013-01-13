@@ -185,8 +185,6 @@ With FROM-END prefix, view from the back."
 (eval-after-load "dired"
   '(define-key dired-mode-map "V" 'dired-vlf))
 
-;;; use this to hijack `abort-if-file-too-large'
-;;;###autoload
 (defun vlf-if-file-too-large (size op-type filename)
   "If file SIZE larger than `large-file-warning-threshold', \
 allow user to view file with `vlf', open it normally or abort.
@@ -210,29 +208,8 @@ OP-TYPE specifies the file operation being performed over  FILENAME."
             ((memq char '(?a ?A))
              (error "Aborted"))))))
 
-;;;; ChangeLog:
-
-;; 2012-11-29  Sam Steingold  <sds@gnu.org>
-;;
-;; 	hook into dired
-;;
-;; 2012-06-17  Chong Yidong  <cyd@gnu.org>
-;;
-;; 	vlf.el: Improve commentary.
-;;
-;; 2012-06-15  Sam Steingold  <sds@gnu.org>
-;;
-;; 	fix vlf-change-batch-size binding
-;;
-;; 2012-06-14  Sam Steingold  <sds@gnu.org>
-;;
-;; 	complete rewrite by Sam Steingold
-;;
-;; 2012-06-14  Sam Steingold  <sds@gnu.org>
-;;
-;; 	View Large Files from Mathias Dahl
-;;
-
+;;; hijack `abort-if-file-too-large'
+(fset 'abort-if-file-too-large 'vlf-if-file-too-large)
 
 (provide 'vlf)
 
