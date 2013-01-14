@@ -189,7 +189,7 @@ With FROM-END prefix, view from the back."
   '(define-key dired-mode-map "V" 'dired-vlf))
 
 ;;;###autoload
-(defun vlf-if-file-too-large (size op-type filename)
+(defun vlf-if-file-too-large (size op-type &optional filename)
   "If file SIZE larger than `large-file-warning-threshold', \
 allow user to view file with `vlf', open it normally or abort.
 OP-TYPE specifies the file operation being performed over FILENAME."
