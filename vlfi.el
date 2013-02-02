@@ -1,4 +1,4 @@
-;;; vlf.el --- View Large Files
+;;; vlfi.el --- View Large Files Improved
 ;;; -*- lexical-bind: t -*-
 
 ;; Copyright (C) 2006, 2012, 2013  Free Software Foundation, Inc.
@@ -26,172 +26,171 @@
 
 ;;; Commentary:
 
-;; This package provides the M-x vlf command, which visits part of a
+;; This package provides the M-x vlfi command, which visits part of a
 ;; large file in a read-only buffer without visiting the entire file.
-;; The buffer uses VLF mode, which defines the commands M-<next>
-;; (vlf-next-batch) and M-<prior> (vlf-prev-batch) to visit other
-;; parts of the file.  The option `vlf-batch-size' specifies the size
+;; The buffer uses VLFI mode, which defines the commands M-<next>
+;; (vlfi-next-batch) and M-<prior> (vlfi-prev-batch) to visit other
+;; parts of the file.  The option `vlfi-batch-size' specifies the size
 ;; of each batch, in bytes.
 
-;; This package was inspired by a snippet posted by Kevin Rodgers,
-;; showing how to use `insert-file-contents' to extract part of a
-;; file.
+;; This package is an improved fork of the vlf.el package.
 
 ;;; Code:
 
-(defgroup vlf nil
+(defgroup vlfi nil
   "View Large Files in Emacs."
-  :prefix "vlf-"
+  :prefix "vlfi-"
   :group 'files)
 
-(defcustom vlf-batch-size 1024
+(defcustom vlfi-batch-size 1024
   "Defines how large each batch of file data is (in bytes)."
   :type 'integer
-  :group 'vlf)
+  :group 'vlfi)
 
 ;; Keep track of file position.
-(defvar vlf-start-pos)
-(defvar vlf-end-pos)
-(defvar vlf-file-size)
+(defvar vlfi-start-pos)
+(defvar vlfi-end-pos)
+(defvar vlfi-file-size)
 
-(defvar vlf-mode-map
+(defvar vlfi-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [M-next] 'vlf-next-batch)
-    (define-key map [M-prior] 'vlf-prev-batch)
-    (define-key map (kbd "M-+") 'vlf-change-batch-size)
+    (define-key map [M-next] 'vlfi-next-batch)
+    (define-key map [M-prior] 'vlfi-prev-batch)
+    (define-key map (kbd "M-+") 'vlfi-change-batch-size)
     (define-key map (kbd "M--")
-      (lambda () "Decrease vlf batch size by factor of 2."
-	(interactive)
-	(vlf-change-batch-size t)))
+      (lambda () "Decrease vlfi batch size by factor of 2."
+        (interactive)
+        (vlfi-change-batch-size t)))
     map)
-  "Keymap for `vlf-mode'.")
+  "Keymap for `vlfi-mode'.")
 
-(define-derived-mode vlf-mode special-mode "VLF"
+(define-derived-mode vlfi-mode special-mode "VLFI"
   "Mode to browse large files in."
   (setq buffer-read-only t)
   (set-buffer-modified-p nil)
-  (make-local-variable 'vlf-batch-size)
-  (make-local-variable 'vlf-start-pos)
-  (make-local-variable 'vlf-file-size))
+  (make-local-variable 'vlfi-batch-size)
+  (make-local-variable 'vlfi-start-pos)
+  (make-local-variable 'vlfi-file-size))
 
-(defun vlf-change-batch-size (decrease)
-  "Change the buffer-local value of `vlf-batch-size'.
+(defun vlfi-change-batch-size (decrease)
+  "Change the buffer-local value of `vlfi-batch-size'.
 Normally, the value is doubled;
 with the prefix argument DECREASE it is halved."
   (interactive "P")
-  (or (assq 'vlf-batch-size (buffer-local-variables))
-      (error "%s is not local in this buffer" 'vlf-batch-size))
-  (setq vlf-batch-size
-	(if decrease
-	    (/ vlf-batch-size 2)
-	  (* vlf-batch-size 2)))
-  (vlf-update-buffer-name))
+  (or (assq 'vlfi-batch-size (buffer-local-variables))
+      (error "%s is not local in this buffer" 'vlfi-batch-size))
+  (setq vlfi-batch-size
+        (if decrease
+            (/ vlfi-batch-size 2)
+          (* vlfi-batch-size 2)))
+  (vlfi-update-buffer-name))
 
-(defun vlf-format-buffer-name ()
-  "Return format for vlf buffer name."
+(defun vlfi-format-buffer-name ()
+  "Return format for vlfi buffer name."
   (format "%s(%s)[%d,%d](%d)"
-	  (file-name-nondirectory buffer-file-name)
-	  (file-size-human-readable vlf-file-size)
-	  vlf-start-pos vlf-end-pos vlf-batch-size))
+          (file-name-nondirectory buffer-file-name)
+          (file-size-human-readable vlfi-file-size)
+          vlfi-start-pos vlfi-end-pos vlfi-batch-size))
 
-(defun vlf-update-buffer-name ()
+(defun vlfi-update-buffer-name ()
   "Update the current buffer name."
-  (rename-buffer (vlf-format-buffer-name) t))
+  (rename-buffer (vlfi-format-buffer-name) t))
 
-(defun vlf-next-batch (append)
+(defun vlfi-next-batch (append)
   "Display the next batch of file data.
 When prefix argument is supplied and positive
  jump over APPEND number of batches.
 When prefix argument is negative
  append next APPEND number of batches to the existing buffer."
   (interactive "p")
-  (let ((end (+ vlf-end-pos (* vlf-batch-size
-			       (abs append)))))
-    (when (< vlf-file-size end)		; re-check file size
-      (setq vlf-file-size (nth 7 (file-attributes buffer-file-name)))
-      (cond ((= vlf-end-pos vlf-file-size)
-	     (error "Already at EOF"))
-	    ((< vlf-file-size end)
-	     (setq end vlf-file-size))))
+  (let ((end (+ vlfi-end-pos (* vlfi-batch-size
+                                (abs append)))))
+    (when (< vlfi-file-size end)		; re-check file size
+      (setq vlfi-file-size (nth 7 (file-attributes buffer-file-name)))
+      (cond ((= vlfi-end-pos vlfi-file-size)
+             (error "Already at EOF"))
+            ((< vlfi-file-size end)
+             (setq end vlfi-file-size))))
     (let ((inhibit-read-only t)
-	  (do-append (< append 0)))
+          (do-append (< append 0)))
       (if do-append
-	  (goto-char (point-max))
-	(setq vlf-start-pos (- end vlf-batch-size))
-	(erase-buffer))
+          (goto-char (point-max))
+        (setq vlfi-start-pos (- end vlfi-batch-size))
+        (erase-buffer))
       (insert-file-contents buffer-file-name nil
-			    (if do-append
-				vlf-end-pos
-			      vlf-start-pos)
-			    end))
-    (setq vlf-end-pos end))
+                            (if do-append
+                                vlfi-end-pos
+                              vlfi-start-pos)
+                            end))
+    (setq vlfi-end-pos end))
   (set-buffer-modified-p nil)
-  (vlf-update-buffer-name))
+  (vlfi-update-buffer-name))
 
-(defun vlf-prev-batch (prepend)
+(defun vlfi-prev-batch (prepend)
   "Display the previous batch of file data.
 When prefix argument is supplied and positive
  jump over PREPEND number of batches.
 When prefix argument is negative
  append previous PREPEND number of batches to the existing buffer."
   (interactive "p")
-  (if (zerop vlf-start-pos)
+  (if (zerop vlfi-start-pos)
       (error "Already at BOF"))
   (let ((inhibit-read-only t)
-	(start (max 0 (- vlf-start-pos (* vlf-batch-size
-					  (abs prepend)))))
-	(do-prepend (< prepend 0)))
+        (start (max 0 (- vlfi-start-pos (* vlfi-batch-size
+                                           (abs prepend)))))
+        (do-prepend (< prepend 0)))
     (if do-prepend
-	(goto-char (point-min))
-      (setq vlf-end-pos (+ start vlf-batch-size))
+        (goto-char (point-min))
+      (setq vlfi-end-pos (+ start vlfi-batch-size))
       (erase-buffer))
     (insert-file-contents buffer-file-name nil start
-			  (if do-prepend
-			      vlf-start-pos
-			    vlf-end-pos))
-    (setq vlf-start-pos start))
+                          (if do-prepend
+                              vlfi-start-pos
+                            vlfi-end-pos))
+    (setq vlfi-start-pos start))
   (set-buffer-modified-p nil)
-  (vlf-update-buffer-name))
+  (vlfi-update-buffer-name))
 
 ;;;###autoload
-(defun vlf (from-end file)
+(defun vlfi (from-end file)
   "View a Large File in Emacs.
 With FROM-END prefix, view from the back.
 FILE is the file to open.
 Batches of the file data from FILE will be displayed in a
  read-only buffer.
 You can customize the number of bytes to
- display by customizing `vlf-batch-size'."
+ display by customizing `vlfi-batch-size'."
   (interactive "P\nfFile to open: ")
-  (with-current-buffer (generate-new-buffer "*vlf*")
+  (with-current-buffer (generate-new-buffer "*vlfi*")
     (setq buffer-file-name file
-	  vlf-file-size (nth 7 (file-attributes file)))
+          vlfi-file-size (nth 7 (file-attributes file)))
     (if from-end
-	(setq vlf-start-pos (max 0 (- vlf-file-size vlf-batch-size))
-	      vlf-end-pos vlf-file-size)
-      (setq vlf-start-pos 0
-	    vlf-end-pos (min vlf-batch-size vlf-file-size)))
-    (vlf-update-buffer-name)
+        (setq vlfi-start-pos (max 0
+                                  (- vlfi-file-size vlfi-batch-size))
+              vlfi-end-pos vlfi-file-size)
+      (setq vlfi-start-pos 0
+            vlfi-end-pos (min vlfi-batch-size vlfi-file-size)))
+    (vlfi-update-buffer-name)
     (insert-file-contents buffer-file-name nil
-			  vlf-start-pos vlf-end-pos)
-    (vlf-mode)
+                          vlfi-start-pos vlfi-end-pos)
+    (vlfi-mode)
     (switch-to-buffer (current-buffer))))
 
 ;;;###autoload
-(defun dired-vlf (from-end)
-  "In Dired, visit the file on this line in VLF mode.
+(defun dired-vlfi (from-end)
+  "In Dired, visit the file on this line in VLFI mode.
 With FROM-END prefix, view from the back."
   (interactive "P")
-  (vlf from-end (dired-get-file-for-visit)))
+  (vlfi from-end (dired-get-file-for-visit)))
 
 ;;;###autoload
 (eval-after-load "dired"
-  '(define-key dired-mode-map "V" 'dired-vlf))
+  '(define-key dired-mode-map "V" 'dired-vlfi))
 
 ;;;###autoload
-(defun vlf-if-file-too-large (size op-type &optional filename)
+(defun vlfi-if-file-too-large (size op-type &optional filename)
   "If file SIZE larger than `large-file-warning-threshold', \
-allow user to view file with `vlf', open it normally or abort.
+allow user to view file with `vlfi', open it normally or abort.
 OP-TYPE specifies the file operation being performed over FILENAME."
   (and large-file-warning-threshold size
        (> size large-file-warning-threshold)
@@ -199,7 +198,8 @@ OP-TYPE specifies the file operation being performed over FILENAME."
          (while (not (memq (setq char
                                  (read-event
                                   (propertize
-                                   (format "File %s is large (%s): %s normally (o), %s with vlf (v) or abort (a)"
+                                   (format "File %s is large (%s): \
+%s normally (o), %s with vlfi (v) or abort (a)"
                                            (file-name-nondirectory filename)
                                            (file-size-human-readable size)
                                            op-type op-type)
@@ -207,15 +207,15 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                            '(?o ?O ?v ?V ?a ?A))))
          (cond ((memq char '(?o ?O)))
                ((memq char '(?v ?V))
-                (vlf nil filename)
+                (vlfi nil filename)
                 (error ""))
                ((memq char '(?a ?A))
                 (error "Aborted"))))))
 
 ;;; hijack `abort-if-file-too-large'
 ;;;###autoload
-(fset 'abort-if-file-too-large 'vlf-if-file-too-large)
+(fset 'abort-if-file-too-large 'vlfi-if-file-too-large)
 
-(provide 'vlf)
+(provide 'vlfi)
 
-;;; vlf.el ends here
+;;; vlfi.el ends here
