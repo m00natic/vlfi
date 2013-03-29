@@ -62,6 +62,7 @@
         (interactive)
         (vlfi-change-batch-size t)))
     (define-key map "\C-c\C-s" 'vlfi-re-search-forward)
+    (define-key map "\C-c\C-r" 'vlfi-re-search-backward)
     map)
   "Keymap for `vlfi-mode'.")
 
@@ -222,26 +223,38 @@ OP-TYPE specifies the file operation being performed over FILENAME."
 (fset 'abort-if-file-too-large 'vlfi-if-file-too-large)
 
 ;;; search
-(defun vlfi-re-search-forward (regexp &optional count)
-  "Search for REGEXP COUNT number of times."
-  (interactive "sSearch: \np")
+(defun vlfi-re-search (regexp backward count)
+  "Search for REGEXP BACKWARD or forward COUNT number of times."
   (let ((start vlfi-start-pos)
         (end vlfi-end-pos)
         (pos (point))
         (to-find count)
         (search-reporter (make-progress-reporter
                           (concat "Searching for " regexp)
-                          vlfi-start-pos vlfi-file-size)))
+                          (if backward
+                              (- vlfi-file-size vlfi-start-pos)
+                            vlfi-start-pos)
+                          vlfi-file-size)))
     (unwind-protect
         (catch 'end-of-file
-          (while (not (zerop to-find))
-            (cond ((re-search-forward regexp nil t)
-                   (setq to-find (1- to-find)))
-                  ((= vlfi-end-pos vlfi-file-size)
-                   (throw 'end-of-file nil))
-                  (t (vlfi-next-batch 1)
-                     (progress-reporter-update search-reporter
-                                               vlfi-end-pos)))))
+          (if backward
+              (while (not (zerop to-find))
+                (cond ((re-search-backward regexp nil t)
+                       (setq to-find (1- to-find)))
+                      ((zerop vlfi-start-pos)
+                       (throw 'end-of-file nil))
+                      (t (vlfi-prev-batch 1)
+                         (progress-reporter-update
+                          search-reporter (- vlfi-file-size
+                                             vlfi-end-pos)))))
+            (while (not (zerop to-find))
+              (cond ((re-search-forward regexp nil t)
+                     (setq to-find (1- to-find)))
+                    ((= vlfi-end-pos vlfi-file-size)
+                     (throw 'end-of-file nil))
+                    (t (vlfi-next-batch 1)
+                       (progress-reporter-update search-reporter
+                                                 vlfi-end-pos))))))
       (progress-reporter-done search-reporter)
       (or (zerop to-find)
           (if (< to-find count)
@@ -256,6 +269,16 @@ OP-TYPE specifies the file operation being performed over FILENAME."
             (set-buffer-modified-p nil)
             (vlfi-update-buffer-name)
             (message "Not found"))))))
+
+(defun vlfi-re-search-forward (regexp count)
+  "Search forward for REGEXP COUNT number of times."
+  (interactive "sSearch whole file: \np")
+  (vlfi-re-search regexp nil count))
+
+(defun vlfi-re-search-backward (regexp count)
+  "Search backward for REGEXP COUNT number of times."
+  (interactive "sSearch whole file backward: \np")
+  (vlfi-re-search regexp t count))
 
 (provide 'vlfi)
 
