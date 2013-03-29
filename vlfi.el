@@ -61,6 +61,7 @@
       (lambda () "Decrease vlfi batch size by factor of 2."
         (interactive)
         (vlfi-change-batch-size t)))
+    (define-key map "\C-c\C-s" 'vlfi-re-search-forward)
     map)
   "Keymap for `vlfi-mode'.")
 
@@ -219,6 +220,34 @@ OP-TYPE specifies the file operation being performed over FILENAME."
 ;;; hijack `abort-if-file-too-large'
 ;;;###autoload
 (fset 'abort-if-file-too-large 'vlfi-if-file-too-large)
+
+;;; search
+(defun vlfi-re-search-forward (regexp &optional count)
+  "Search for REGEXP COUNT number of times."
+  (interactive "sSearch: \np")
+  (let ((start vlfi-start-pos)
+        (end vlfi-end-pos)
+        (pos (point))
+        (to-find count))
+    (catch 'end-of-file
+      (while (not (zerop to-find))
+        (cond ((re-search-forward regexp nil t)
+               (setq to-find (1- to-find)))
+              ((= vlfi-end-pos vlfi-file-size)
+               (throw 'end-of-file nil))
+              (t (vlfi-next-batch 1)))))
+    (or (zerop to-find)
+        (if (< to-find count)
+            (message "Moved to the %d match which is last"
+                     (- count to-find))
+          (let ((inhibit-read-only t))
+            (insert-file-contents buffer-file-name nil start end))
+          (goto-char pos)
+          (setq vlfi-start-pos start
+                vlfi-end-pos end)
+          (set-buffer-modified-p nil)
+          (vlfi-update-buffer-name)
+          (message "None found")))))
 
 (provide 'vlfi)
 
