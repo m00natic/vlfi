@@ -228,26 +228,34 @@ OP-TYPE specifies the file operation being performed over FILENAME."
   (let ((start vlfi-start-pos)
         (end vlfi-end-pos)
         (pos (point))
-        (to-find count))
-    (catch 'end-of-file
-      (while (not (zerop to-find))
-        (cond ((re-search-forward regexp nil t)
-               (setq to-find (1- to-find)))
-              ((= vlfi-end-pos vlfi-file-size)
-               (throw 'end-of-file nil))
-              (t (vlfi-next-batch 1)))))
-    (or (zerop to-find)
-        (if (< to-find count)
-            (message "Moved to the %d match which is last"
-                     (- count to-find))
-          (let ((inhibit-read-only t))
-            (insert-file-contents buffer-file-name nil start end))
-          (goto-char pos)
-          (setq vlfi-start-pos start
-                vlfi-end-pos end)
-          (set-buffer-modified-p nil)
-          (vlfi-update-buffer-name)
-          (message "Not found")))))
+        (to-find count)
+        (search-reporter (make-progress-reporter
+                          (concat "Searching for " regexp)
+                          vlfi-start-pos vlfi-file-size)))
+    (unwind-protect
+        (catch 'end-of-file
+          (while (not (zerop to-find))
+            (cond ((re-search-forward regexp nil t)
+                   (setq to-find (1- to-find)))
+                  ((= vlfi-end-pos vlfi-file-size)
+                   (throw 'end-of-file nil))
+                  (t (vlfi-next-batch 1)
+                     (progress-reporter-update search-reporter
+                                               vlfi-end-pos)))))
+      (progress-reporter-done search-reporter)
+      (or (zerop to-find)
+          (if (< to-find count)
+              (message "Moved to the %d match which is last"
+                       (- count to-find))
+            (let ((inhibit-read-only t))
+              (erase-buffer)
+              (insert-file-contents buffer-file-name nil start end))
+            (goto-char pos)
+            (setq vlfi-start-pos start
+                  vlfi-end-pos end)
+            (set-buffer-modified-p nil)
+            (vlfi-update-buffer-name)
+            (message "Not found"))))))
 
 (provide 'vlfi)
 
