@@ -165,6 +165,7 @@ You can customize the number of bytes to
  display by customizing `vlfi-batch-size'."
   (interactive "P\nfFile to open: ")
   (with-current-buffer (generate-new-buffer "*vlfi*")
+    (buffer-disable-undo)
     (setq buffer-file-name file
           vlfi-file-size (nth 7 (file-attributes file)))
     (if from-end
