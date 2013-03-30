@@ -95,13 +95,11 @@ with the prefix argument DECREASE it is halved."
 
 (defun vlfi-format-buffer-name ()
   "Return format for vlfi buffer name."
-  (let ((vlfi-file-size-float (float vlfi-file-size)))
-    (format "%s(%s)[%.2f-%.2f%%%%](%d)"
-            (file-name-nondirectory buffer-file-name)
-            (file-size-human-readable vlfi-file-size)
-            (* 100 (/ vlfi-start-pos vlfi-file-size-float))
-            (* 100 (/ vlfi-end-pos vlfi-file-size-float))
-            vlfi-batch-size)))
+  (format "%s(%s)[%.2f%%%%](%d)"
+          (file-name-nondirectory buffer-file-name)
+          (file-size-human-readable vlfi-file-size)
+          (/ (* 100 vlfi-end-pos) (float vlfi-file-size))
+          vlfi-batch-size))
 
 (defun vlfi-update-buffer-name ()
   "Update the current buffer name."
