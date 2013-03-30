@@ -63,6 +63,12 @@
         (vlfi-change-batch-size t)))
     (define-key map "\C-c\C-s" 'vlfi-re-search-forward)
     (define-key map "\C-c\C-r" 'vlfi-re-search-backward)
+    (define-key map "\C-c>" (lambda () "Jump to end of file content."
+                              (interactive)
+                              (vlfi-insert-file buffer-file-name t)))
+    (define-key map "\C-c<" (lambda () "Jump to beginning of file content."
+                              (interactive)
+                              (vlfi-insert-file buffer-file-name)))
     map)
   "Keymap for `vlfi-mode'.")
 
@@ -156,29 +162,33 @@ When prefix argument is negative
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
 
+(defun vlfi-insert-file (file &optional from-end)
+  "Insert first chunk of FILE contents in current buffer.
+With FROM-END prefix, start from the back."
+  (if from-end
+      (setq vlfi-start-pos (max 0 (- vlfi-file-size vlfi-batch-size))
+            vlfi-end-pos vlfi-file-size)
+    (setq vlfi-start-pos 0
+          vlfi-end-pos (min vlfi-batch-size vlfi-file-size)))
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    (insert-file-contents buffer-file-name nil
+                          vlfi-start-pos vlfi-end-pos))
+  (set-buffer-modified-p nil)
+  (vlfi-update-buffer-name))
+
 ;;;###autoload
-(defun vlfi (from-end file)
-  "View a Large File in Emacs.
-With FROM-END prefix, view from the back.
-FILE is the file to open.
-Batches of the file data from FILE will be displayed in a
- read-only buffer.
-You can customize the number of bytes to
- display by customizing `vlfi-batch-size'."
-  (interactive "P\nfFile to open: ")
+(defun vlfi (file &optional from-end)
+  "View Large FILE.  With FROM-END prefix, view from the back.
+Batches of the file data from FILE will be displayed in a read-only
+buffer.  You can customize number of bytes displayed by customizing
+`vlfi-batch-size'."
+  (interactive "fFile to open: \nP")
   (with-current-buffer (generate-new-buffer "*vlfi*")
     (buffer-disable-undo)
     (setq buffer-file-name file
           vlfi-file-size (nth 7 (file-attributes file)))
-    (if from-end
-        (setq vlfi-start-pos (max 0
-                                  (- vlfi-file-size vlfi-batch-size))
-              vlfi-end-pos vlfi-file-size)
-      (setq vlfi-start-pos 0
-            vlfi-end-pos (min vlfi-batch-size vlfi-file-size)))
-    (vlfi-update-buffer-name)
-    (insert-file-contents buffer-file-name nil
-                          vlfi-start-pos vlfi-end-pos)
+    (vlfi-insert-file file from-end)
     (vlfi-mode)
     (switch-to-buffer (current-buffer))))
 
@@ -187,7 +197,7 @@ You can customize the number of bytes to
   "In Dired, visit the file on this line in VLFI mode.
 With FROM-END prefix, view from the back."
   (interactive "P")
-  (vlfi from-end (dired-get-file-for-visit)))
+  (vlfi (dired-get-file-for-visit) from-end))
 
 ;;;###autoload
 (eval-after-load "dired"
