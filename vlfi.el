@@ -121,7 +121,8 @@ When prefix argument is negative
             ((< vlfi-file-size end)
              (setq end vlfi-file-size))))
     (let ((inhibit-read-only t)
-          (do-append (< append 0)))
+          (do-append (< append 0))
+          (pos (point)))
       (if do-append
           (goto-char (point-max))
         (setq vlfi-start-pos (- end vlfi-batch-size))
@@ -130,7 +131,8 @@ When prefix argument is negative
                             (if do-append
                                 vlfi-end-pos
                               vlfi-start-pos)
-                            end))
+                            end)
+      (goto-char pos))
     (setq vlfi-end-pos end))
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
@@ -147,7 +149,8 @@ When prefix argument is negative
   (let ((inhibit-read-only t)
         (start (max 0 (- vlfi-start-pos (* vlfi-batch-size
                                            (abs prepend)))))
-        (do-prepend (< prepend 0)))
+        (do-prepend (< prepend 0))
+        (pos (- (point-max) (point))))
     (if do-prepend
         (goto-char (point-min))
       (setq vlfi-end-pos (+ start vlfi-batch-size))
@@ -156,6 +159,7 @@ When prefix argument is negative
                           (if do-prepend
                               vlfi-start-pos
                             vlfi-end-pos))
+    (goto-char (- (point-max) pos))
     (setq vlfi-start-pos start))
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
