@@ -246,7 +246,9 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                           (if backward
                               (- vlfi-file-size vlfi-start-pos)
                             vlfi-start-pos)
-                          vlfi-file-size)))
+                          vlfi-file-size))
+        (initial-chunk t)
+        (prev 0))
     (unwind-protect
         (catch 'end-of-file
           (if backward
@@ -255,7 +257,12 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                        (setq to-find (1- to-find)))
                       ((zerop vlfi-start-pos)
                        (throw 'end-of-file nil))
-                      (t (vlfi-prev-batch 1)
+                      (t (if initial-chunk
+                             (setq initial-chunk nil)
+                           (let ((inhibit-read-only t))
+                             (delete-region prev (point-max))))
+                         (setq prev (point-min))
+                         (vlfi-prev-batch -1)
                          (progress-reporter-update
                           search-reporter (- vlfi-file-size
                                              vlfi-end-pos)))))
@@ -264,7 +271,12 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                      (setq to-find (1- to-find)))
                     ((= vlfi-end-pos vlfi-file-size)
                      (throw 'end-of-file nil))
-                    (t (vlfi-next-batch 1)
+                    (t (if initial-chunk
+                           (setq initial-chunk nil)
+                         (let ((inhibit-read-only t))
+                           (delete-region (point-min) prev)))
+                       (setq prev (point-max))
+                       (vlfi-next-batch -1)
                        (progress-reporter-update search-reporter
                                                  vlfi-end-pos))))))
       (progress-reporter-done search-reporter)
