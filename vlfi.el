@@ -61,14 +61,14 @@
       (lambda () "Decrease vlfi batch size by factor of 2."
         (interactive)
         (vlfi-change-batch-size t)))
-    (define-key map "\C-c\C-s" 'vlfi-re-search-forward)
-    (define-key map "\C-c\C-r" 'vlfi-re-search-backward)
-    (define-key map "\C-c>" (lambda () "Jump to end of file content."
-                              (interactive)
-                              (vlfi-insert-file buffer-file-name t)))
-    (define-key map "\C-c<" (lambda () "Jump to beginning of file content."
-                              (interactive)
-                              (vlfi-insert-file buffer-file-name)))
+    (define-key map "s" 'vlfi-re-search-forward)
+    (define-key map "r" 'vlfi-re-search-backward)
+    (define-key map ">" (lambda () "Jump to end of file content."
+                          (interactive)
+                          (vlfi-insert-file buffer-file-name t)))
+    (define-key map "<" (lambda () "Jump to beginning of file content."
+                          (interactive)
+                          (vlfi-insert-file buffer-file-name)))
     map)
   "Keymap for `vlfi-mode'.")
 
