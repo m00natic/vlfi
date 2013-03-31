@@ -3,7 +3,7 @@
 
 ;; Copyright (C) 2006, 2012, 2013  Free Software Foundation, Inc.
 
-;; Version: 0.3
+;; Version: 0.4
 ;; Keywords: large files, utilities
 ;; Authors: 2006 Mathias Dahl <mathias.dahl@gmail.com>
 ;;          2012 Sam Steingold <sds@gnu.org>
@@ -166,9 +166,10 @@ When prefix argument is negative
 
 (defun vlfi-move-to-chunk (start end)
   "Move to chunk determined by START END."
-  (when (< vlfi-file-size end)          ; re-check file size
-    (setq vlfi-file-size (nth 7 (file-attributes buffer-file-name))))
-  (setq vlfi-start-pos start
+  (if (< vlfi-file-size end)          ; re-check file size
+      (setq vlfi-file-size (nth 7
+                                (file-attributes buffer-file-name))))
+  (setq vlfi-start-pos (max 0 start)
         vlfi-end-pos (min end vlfi-file-size))
   (let ((inhibit-read-only t))
     (erase-buffer)
@@ -242,97 +243,15 @@ OP-TYPE specifies the file operation being performed over FILENAME."
 ;;;###autoload
 (fset 'abort-if-file-too-large 'vlfi-if-file-too-large)
 
-;;; search
-(defun vlfi-re-search (regexp backward count)
-  "Search for REGEXP BACKWARD or forward COUNT number of times."
-  (let ((start vlfi-start-pos)
-        (end vlfi-end-pos)
-        (pos (point))
-        (to-find count)
-        (search-reporter (make-progress-reporter
-                          (concat "Searching for " regexp)
-                          (if backward
-                              (- vlfi-file-size vlfi-start-pos)
-                            vlfi-start-pos)
-                          vlfi-file-size))
-        (initial-chunk t)
-        (prev 0)
-        match-chunk-start-pos match-chunk-end-pos)
-    (unwind-protect
-        (catch 'end-of-file
-          (if backward
-              (while (not (zerop to-find))
-                (cond ((re-search-backward regexp nil t)
-                       (setq to-find (1- to-find)
-                             match-chunk-start-pos vlfi-start-pos
-                             match-chunk-end-pos
-                             (if (< (match-end 0) prev)
-                                 vlfi-end-pos
-                               (- vlfi-end-pos vlfi-batch-size))))
-                      ((zerop vlfi-start-pos)
-                       (throw 'end-of-file t))
-                      (t (if initial-chunk
-                             (setq initial-chunk nil)
-                           (let ((inhibit-read-only t))
-                             (delete-region prev (point-max)))
-                           (setq vlfi-end-pos (- vlfi-end-pos
-                                                 vlfi-batch-size)))
-                         (setq prev (point-min))
-                         (vlfi-prev-batch -1)
-                         (goto-char (point-max))
-                         (progress-reporter-update
-                          search-reporter (- vlfi-file-size
-                                             vlfi-end-pos)))))
-            (while (not (zerop to-find))
-              (cond ((re-search-forward regexp nil t)
-                     (setq to-find (1- to-find)
-                           match-chunk-end-pos vlfi-end-pos
-                           match-chunk-start-pos
-                           (if (< prev (match-beginning 0))
-                               vlfi-start-pos
-                             (+ vlfi-start-pos vlfi-batch-size))))
-                    ((= vlfi-end-pos vlfi-file-size)
-                     (throw 'end-of-file t))
-                    (t (if initial-chunk
-                           (setq initial-chunk nil)
-                         (let ((inhibit-read-only t))
-                           (delete-region (point-min) prev))
-                         (setq vlfi-start-pos (+ vlfi-start-pos
-                                                 vlfi-batch-size)))
-                       (setq prev (point-max))
-                       (vlfi-next-batch -1)
-                       (goto-char (point-min))
-                       (progress-reporter-update search-reporter
-                                                 vlfi-end-pos))))))
-      (and (not initial-chunk)
-           (< to-find count)
-           (if backward                 ; remove additional chunk
-               (if (< (match-end 0) prev)
-                   (let ((inhibit-read-only t))
-                     (delete-region prev (point-max))))
-             (if (< prev (match-beginning 0))
-                 (let ((inhibit-read-only t))
-                   (delete-region (point-min) prev)))))
-      (progress-reporter-done search-reporter)
-      (or (zerop to-find)
-          (if (< to-find count)
-              (message "Moved to the %d match which is last"
-                       (- count to-find))
-            (let ((inhibit-read-only t))
-              (erase-buffer)
-              (insert-file-contents buffer-file-name nil start end))
-            (goto-char pos)
-            (setq vlfi-start-pos start
-                  vlfi-end-pos end)
-            (set-buffer-modified-p nil)
-            (vlfi-update-buffer-name)
-            (message "Not found"))))))
-
 (defun vlfi-re-search-forward (regexp count)
-  "Search forward for REGEXP COUNT number of times."
-  (interactive "sSearch whole file: \np")
-  (let ((match-chunk-start-pos vlfi-start-pos)
-        (match-chunk-end-pos vlfi-end-pos)
+  "Search forward for REGEXP prefix COUNT number of times."
+  (interactive (list (read-regexp "Search whole file"
+                                  (if regexp-history
+                                      (car regexp-history))
+                                  'regexp-history)
+                     (or current-prefix-arg 1)))
+  (let ((match-chunk-start vlfi-start-pos)
+        (match-chunk-end vlfi-end-pos)
         (match-start-pos (point))
         (match-end-pos (point))
         (to-find count)
@@ -350,11 +269,13 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                                    (1- to-find))
                          match-start-pos (match-beginning 0)
                          match-end-pos (match-end 0)
-                         match-chunk-start-pos vlfi-start-pos
-                         match-chunk-end-pos vlfi-end-pos)
-                   (if (< vlfi-batch-size match-start-pos)
-                       (setq match-chunk-start-pos
-                             (+ match-chunk-start-pos vlfi-batch-size)
+                         match-chunk-start vlfi-start-pos
+                         match-chunk-end vlfi-end-pos)
+                   (if (and (< vlfi-batch-size match-start-pos)
+                            (> (- vlfi-end-pos vlfi-start-pos)
+                               vlfi-batch-size))
+                       (setq match-chunk-start
+                             (+ match-chunk-start vlfi-batch-size)
                              match-start-pos (- match-start-pos
                                                 vlfi-batch-size)
                              match-end-pos (- match-end-pos
@@ -368,27 +289,85 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                                               vlfi-batch-size)
                                            (+ vlfi-end-pos
                                               vlfi-batch-size)))
+                     (goto-char (if (< vlfi-start-pos match-chunk-end)
+                                    match-start-pos
+                                  (point-min)))
                      (goto-char match-start-pos)
                      (progress-reporter-update search-reporter
                                                vlfi-end-pos))))
           (progress-reporter-done search-reporter))
-      (if (zerop to-find)
-          (when (< vlfi-start-pos match-chunk-start-pos)
-            (let ((inhibit-read-only t))
-              (delete-region (point-min) (1+ vlfi-batch-size)))
-            (setq vlfi-start-pos match-chunk-start-pos))
-        (vlfi-move-to-chunk match-chunk-start-pos
-                            match-chunk-end-pos)
-        (goto-char match-end-pos)
-        (if (< to-find count)
-            (message "Moved to the %d match which is last found"
-                     (- count to-find))
-          (message "Not found"))))))
+      (vlfi-end-search match-chunk-start match-chunk-end
+                       match-end-pos count to-find))))
 
 (defun vlfi-re-search-backward (regexp count)
-  "Search backward for REGEXP COUNT number of times."
-  (interactive "sSearch whole file backward: \np")
-  (vlfi-re-search regexp t count))
+  "Search backward for REGEXP prefix COUNT number of times."
+  (interactive (list (read-regexp "Search whole file"
+                                  (if regexp-history
+                                      (car regexp-history))
+                                  'regexp-history)
+                     (or current-prefix-arg 1)))
+  (let ((match-chunk-start vlfi-start-pos)
+        (match-chunk-end vlfi-end-pos)
+        (match-start-pos (point))
+        (match-end-pos (point))
+        (to-find count)
+        (search-reporter (make-progress-reporter
+                          (concat "Searching for " regexp)
+                          (- vlfi-file-size vlfi-end-pos)
+                          vlfi-file-size))
+        (initial-chunk t))
+    (unwind-protect
+        (catch 'start-of-file
+          (while (not (zerop to-find))
+            (cond ((re-search-backward regexp nil t)
+                   (setq to-find (if (= match-end-pos
+                                        (match-end 0))
+                                     to-find
+                                   (1- to-find))
+                         match-start-pos (match-beginning 0)
+                         match-end-pos (match-end 0)
+                         match-chunk-start vlfi-start-pos
+                         match-chunk-end vlfi-end-pos)
+                   (if (and (< match-end-pos vlfi-batch-size)
+                            (> (- vlfi-end-pos vlfi-start-pos)
+                               vlfi-batch-size))
+                       (setq match-chunk-end
+                             (- match-chunk-end
+                                vlfi-batch-size))))
+                  ((zerop vlfi-start-pos)
+                   (throw 'start-of-file nil))
+                  (t (if initial-chunk
+                         (progn (setq initial-chunk nil)
+                                (vlfi-prev-batch -1))
+                       (vlfi-move-to-chunk (- vlfi-start-pos
+                                              vlfi-batch-size)
+                                           (- vlfi-end-pos
+                                              vlfi-batch-size)))
+                     (goto-char (if (< match-chunk-start vlfi-end-pos)
+                                    match-end-pos
+                                  (point-max)))
+                     (setq last-chunk-match nil)
+                     (progress-reporter-update search-reporter
+                                               (- vlfi-file-size
+                                                  vlfi-start-pos)))))
+          (progress-reporter-done search-reporter))
+      (vlfi-end-search match-chunk-start match-chunk-end
+                       match-start-pos count to-find))))
+
+(defun vlfi-end-search (match-chunk-start match-chunk-end
+                                          match-pos count to-find)
+  "Move to chunk determined by MATCH-CHUNK-START and MATCH-CHUNK-END.
+Go to MATCH-POS and according to COUNT and left TO-FIND show if search
+has been successful.  Return nil if nothing found."
+  (vlfi-move-to-chunk match-chunk-start match-chunk-end)
+  (goto-char match-pos)
+  (cond ((zerop to-find) t)
+        ((< to-find count)
+         (message "Moved to the %d match which is last found"
+                  (- count to-find))
+         t)
+        (t (message "Not found")
+           nil)))
 
 (provide 'vlfi)
 
