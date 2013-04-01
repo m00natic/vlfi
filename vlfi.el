@@ -277,17 +277,18 @@ OP-TYPE specifies the file operation being performed over FILENAME."
           (if backward
               (while (not (zerop to-find))
                 (cond ((re-search-backward regexp nil t)
-                       (setq match-start-pos (+ vlfi-start-pos
-                                                (match-beginning 0)))
-                       (let ((new-match-end (+ vlfi-start-pos
-                                               (match-end 0))))
-                         (if (< new-match-end match-end-pos)
-                             (setq to-find (1- to-find)
-                                   match-end-pos new-match-end))))
+                       (setq to-find (1- to-find)
+                             match-start-pos (+ vlfi-start-pos
+                                                (match-beginning 0))
+                             match-end-pos (+ vlfi-start-pos
+                                              (match-end 0))))
                       ((zerop vlfi-start-pos)
                        (throw 'end-of-file nil))
-                      (t (vlfi-move-to-batch (- vlfi-start-pos
-                                                half-batch))
+                      (t (let ((half-move (- vlfi-start-pos half-batch)))
+                           (vlfi-move-to-batch
+                            (if (< match-start-pos half-move)
+                                (- match-start-pos vlfi-batch-size)
+                              half-move)))
                          (goto-char (if (< match-start-pos
                                            vlfi-end-pos)
                                         (- match-start-pos
@@ -297,16 +298,18 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                                                    vlfi-start-pos))))
             (while (not (zerop to-find))
               (cond ((re-search-forward regexp nil t)
-                     (setq match-end-pos (+ vlfi-start-pos
-                                            (match-end 0)))
-                     (let ((new-match-start (+ vlfi-start-pos
-                                               (match-beginning 0))))
-                       (if (< match-start-pos new-match-start)
-                           (setq to-find (1- to-find)
-                                 match-start-pos new-match-start))))
+                     (setq to-find (1- to-find)
+                           match-start-pos (+ vlfi-start-pos
+                                              (match-beginning 0))
+                           match-end-pos (+ vlfi-start-pos
+                                            (match-end 0))))
                     ((= vlfi-end-pos vlfi-file-size)
                      (throw 'end-of-file nil))
-                    (t (vlfi-move-to-batch (- vlfi-end-pos half-batch))
+                    (t (let ((half-move (- vlfi-end-pos half-batch)))
+                         (vlfi-move-to-batch
+                          (if (< half-move match-end-pos)
+                              match-end-pos
+                            half-move)))
                        (goto-char (if (< vlfi-start-pos match-end-pos)
                                       (- match-end-pos vlfi-start-pos)
                                     (point-min)))
@@ -341,7 +344,7 @@ successful.  Return nil if nothing found."
 
 (defun vlfi-re-search-backward (regexp count)
   "Search backward for REGEXP prefix COUNT number of times."
-  (interactive (list (read-regexp "Search whole file"
+  (interactive (list (read-regexp "Search whole file backward"
                                   (if regexp-history
                                       (car regexp-history))
                                   'regexp-history)
