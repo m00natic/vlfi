@@ -271,7 +271,7 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                                (- vlfi-file-size vlfi-end-pos)
                              vlfi-start-pos)
                            vlfi-file-size))
-         (half-batch (/ vlfi-batch-size 2)))
+         (batch-step (/ vlfi-batch-size 8))) ; amount of chunk overlap
     (unwind-protect
         (catch 'end-of-file
           (if backward
@@ -284,11 +284,13 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                                               (match-end 0))))
                       ((zerop vlfi-start-pos)
                        (throw 'end-of-file nil))
-                      (t (let ((half-move (- vlfi-start-pos half-batch)))
+                      (t (let ((batch-move (- vlfi-start-pos
+                                              (- vlfi-batch-size
+                                                 batch-step))))
                            (vlfi-move-to-batch
-                            (if (< match-start-pos half-move)
+                            (if (< match-start-pos batch-move)
                                 (- match-start-pos vlfi-batch-size)
-                              half-move)))
+                              batch-move)))
                          (goto-char (if (< match-start-pos
                                            vlfi-end-pos)
                                         (- match-start-pos
@@ -305,11 +307,11 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                                             (match-end 0))))
                     ((= vlfi-end-pos vlfi-file-size)
                      (throw 'end-of-file nil))
-                    (t (let ((half-move (- vlfi-end-pos half-batch)))
+                    (t (let ((batch-move (- vlfi-end-pos batch-step)))
                          (vlfi-move-to-batch
-                          (if (< half-move match-end-pos)
+                          (if (< batch-move match-end-pos)
                               match-end-pos
-                            half-move)))
+                            batch-move)))
                        (goto-char (if (< vlfi-start-pos match-end-pos)
                                       (- match-end-pos vlfi-start-pos)
                                     (point-min)))
