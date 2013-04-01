@@ -56,8 +56,8 @@
   (let ((map (make-sparse-keymap)))
     (define-key map [M-next] 'vlfi-next-batch)
     (define-key map [M-prior] 'vlfi-prev-batch)
-    (define-key map (kbd "M-+") 'vlfi-change-batch-size)
-    (define-key map (kbd "M--")
+    (define-key map "+" 'vlfi-change-batch-size)
+    (define-key map "-"
       (lambda () "Decrease vlfi batch size by factor of 2."
         (interactive)
         (vlfi-change-batch-size t)))
