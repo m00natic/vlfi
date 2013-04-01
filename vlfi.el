@@ -87,11 +87,10 @@ with the prefix argument DECREASE it is halved."
   (interactive "P")
   (or (assq 'vlfi-batch-size (buffer-local-variables))
       (error "%s is not local in this buffer" 'vlfi-batch-size))
-  (setq vlfi-batch-size
-        (if decrease
-            (/ vlfi-batch-size 2)
-          (* vlfi-batch-size 2)))
-  (vlfi-update-buffer-name))
+  (setq vlfi-batch-size (if decrease
+                            (/ vlfi-batch-size 2)
+                          (* vlfi-batch-size 2)))
+  (vlfi-move-to-batch vlfi-start-pos))
 
 (defun vlfi-format-buffer-name ()
   "Return format for vlfi buffer name."
