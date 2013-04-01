@@ -316,22 +316,31 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                        (progress-reporter-update search-reporter
                                                  vlfi-end-pos)))))
           (progress-reporter-done search-reporter))
-      (vlfi-end-search (if backward match-start-pos match-end-pos)
-                       count to-find))))
+      (if backward
+          (vlfi-end-search match-end-pos match-start-pos
+                           count to-find)
+        (vlfi-end-search match-start-pos match-end-pos
+                         count to-find)))))
 
-(defun vlfi-end-search (match-pos count to-find)
-  "Move to chunk surrounding MATCH-POS.
+(defun vlfi-end-search (match-pos-start match-pos-end count to-find)
+  "Move to chunk surrounding MATCH-POS-START and MATCH-POS-END.
 According to COUNT and left TO-FIND show if search has been
 successful.  Return nil if nothing found."
-  (vlfi-move-to-batch (- match-pos (/ vlfi-batch-size 2)))
-  (goto-char (- match-pos vlfi-start-pos))
-  (cond ((zerop to-find) t)
-        ((< to-find count)
-         (message "Moved to the %d match which is last found"
-                  (- count to-find))
-         t)
-        (t (message "Not found")
-           nil)))
+  (vlfi-move-to-batch (- match-pos-start (/ vlfi-batch-size 2)))
+  (let* ((match-end (- match-pos-end vlfi-start-pos))
+         (overlay (make-overlay (- match-pos-start vlfi-start-pos)
+                                match-end)))
+    (overlay-put overlay 'face 'region)
+    (goto-char match-end)
+    (cond ((zerop to-find) t)
+          ((< to-find count)
+           (message "Moved to the %d match which is last found"
+                    (- count to-find))
+           t)
+          (t (message "Not found")
+             nil))
+    (sit-for 0.1)
+    (delete-overlay overlay)))
 
 (defun vlfi-re-search-forward (regexp count)
   "Search forward for REGEXP prefix COUNT number of times."
