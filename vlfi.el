@@ -48,9 +48,11 @@
   :group 'vlfi)
 
 ;; Keep track of file position.
-(defvar vlfi-start-pos)
-(defvar vlfi-end-pos)
-(defvar vlfi-file-size)
+(defvar vlfi-start-pos 0
+  "Absolute position of the visible chunk start.")
+(defvar vlfi-end-pos vlfi-batch-size
+  "Absolute position of the visible chunk end.")
+(defvar vlfi-file-size 0 "Total size of presented file.")
 
 (defvar vlfi-mode-map
   (let ((map (make-sparse-keymap)))
@@ -76,8 +78,10 @@
   "Mode to browse large files in."
   (setq buffer-read-only t)
   (set-buffer-modified-p nil)
+  (buffer-disable-undo)
   (make-local-variable 'vlfi-batch-size)
   (make-local-variable 'vlfi-start-pos)
+  (make-local-variable 'vlfi-end-pos)
   (make-local-variable 'vlfi-file-size))
 
 (defun vlfi-change-batch-size (decrease)
@@ -212,7 +216,6 @@ buffer.  You can customize number of bytes displayed by customizing
 `vlfi-batch-size'."
   (interactive "fFile to open: \nP")
   (with-current-buffer (generate-new-buffer "*vlfi*")
-    (buffer-disable-undo)
     (setq buffer-file-name file
           vlfi-file-size (nth 7 (file-attributes file)))
     (vlfi-insert-file file from-end)
