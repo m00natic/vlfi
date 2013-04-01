@@ -164,6 +164,23 @@ When prefix argument is negative
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
 
+(defun vlfi-move-to-batch (start)
+  "Move to batch determined by START.
+Adjust according to file start/end and show `vlfi-batch-size' bytes."
+  (setq vlfi-start-pos (max 0 start)
+        vlfi-end-pos (+ vlfi-start-pos vlfi-batch-size))
+  (if (< vlfi-file-size vlfi-end-pos)   ; re-check file size
+      (setq vlfi-file-size
+            (nth 7 (file-attributes buffer-file-name))
+            vlfi-end-pos (min vlfi-end-pos vlfi-file-size)
+            vlfi-start-pos (max 0 (- vlfi-end-pos vlfi-batch-size))))
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    (insert-file-contents buffer-file-name nil
+                          vlfi-start-pos vlfi-end-pos))
+  (set-buffer-modified-p nil)
+  (vlfi-update-buffer-name))
+
 (defun vlfi-move-to-chunk (start end)
   "Move to chunk determined by START END."
   (if (< vlfi-file-size end)          ; re-check file size
