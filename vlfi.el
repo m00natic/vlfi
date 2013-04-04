@@ -253,7 +253,7 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                            '(?o ?O ?v ?V ?a ?A))))
          (cond ((memq char '(?o ?O)))
                ((memq char '(?v ?V))
-                (vlfi nil filename)
+                (vlfi filename nil)
                 (error ""))
                ((memq char '(?a ?A))
                 (error "Aborted"))))))
