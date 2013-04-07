@@ -47,7 +47,7 @@
   :type 'integer
   :group 'vlfi)
 
-;; Keep track of file position.
+;;; Keep track of file position.
 (defvar vlfi-start-pos 0
   "Absolute position of the visible chunk start.")
 (defvar vlfi-end-pos vlfi-batch-size
@@ -65,10 +65,10 @@
         (vlfi-change-batch-size t)))
     (define-key map "s" 'vlfi-re-search-forward)
     (define-key map "r" 'vlfi-re-search-backward)
-    (define-key map ">" (lambda () "Jump to end of file content."
+    (define-key map "]" (lambda () "Jump to end of file content."
                           (interactive)
                           (vlfi-insert-file buffer-file-name t)))
-    (define-key map "<" (lambda () "Jump to beginning of file content."
+    (define-key map "[" (lambda () "Jump to beginning of file content."
                           (interactive)
                           (vlfi-insert-file buffer-file-name)))
     (define-key map "e" 'vlfi-edit-mode)
