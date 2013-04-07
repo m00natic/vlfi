@@ -3,7 +3,7 @@
 
 ;; Copyright (C) 2006, 2012, 2013  Free Software Foundation, Inc.
 
-;; Version: 0.4
+;; Version: 0.5
 ;; Keywords: large files, utilities
 ;; Authors: 2006 Mathias Dahl <mathias.dahl@gmail.com>
 ;;          2012 Sam Steingold <sds@gnu.org>
@@ -28,10 +28,8 @@
 
 ;; This package provides the M-x vlfi command, which visits part of a
 ;; large file in a read-only buffer without visiting the entire file.
-;; The buffer uses VLFI mode, which defines the commands M-<next>
-;; (vlfi-next-batch) and M-<prior> (vlfi-prev-batch) to visit other
-;; parts of the file.  The option `vlfi-batch-size' specifies the size
-;; of each batch, in bytes.
+;; The buffer uses VLFI mode, which defines several commands for
+;; moving around, searching and editing selected chunk of file.
 
 ;; This package is an improved fork of the vlf.el package.
 

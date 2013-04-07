@@ -5,6 +5,7 @@ that builds on the GNU ELPA vlf.el.  It adds the following
 improvements:
 
 - by chunk search
+- chunk editing
 - options to jump to end or beginning of file
 - ability to jump/insert given number of batches at once
 - ability to view newly added content if the file has grown meanwhile
