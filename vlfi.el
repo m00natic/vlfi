@@ -334,21 +334,24 @@ OP-TYPE specifies the file operation being performed over FILENAME."
   "Move to chunk surrounding MATCH-POS-START and MATCH-POS-END.
 According to COUNT and left TO-FIND, show if search has been
 successful.  Return nil if nothing found."
-  (vlfi-move-to-batch (- match-pos-start (/ vlfi-batch-size 2)))
-  (let* ((match-end (- match-pos-end vlfi-start-pos))
-         (overlay (make-overlay (- match-pos-start vlfi-start-pos)
-                                match-end)))
-    (overlay-put overlay 'face 'region)
-    (goto-char match-end)
-    (prog1 (cond ((zerop to-find) t)
-                 ((< to-find count)
-                  (message "Moved to the %d match which is last found"
-                           (- count to-find))
-                  t)
-                 (t (message "Not found")
-                    nil))
-      (sit-for 0.1)
-      (delete-overlay overlay))))
+  (let ((success (zerop to-find)))
+    (or success
+        (vlfi-move-to-batch (- match-pos-start
+                               (/ vlfi-batch-size 2))))
+    (let* ((match-end (- match-pos-end vlfi-start-pos))
+           (overlay (make-overlay (- match-pos-start vlfi-start-pos)
+                                  match-end)))
+      (overlay-put overlay 'face 'region)
+      (or success (goto-char match-end))
+      (prog1 (cond (success t)
+                   ((< to-find count)
+                    (message "Moved to the %d match which is last"
+                             (- count to-find))
+                    t)
+                   (t (message "Not found")
+                      nil))
+        (sit-for 0.1)
+        (delete-overlay overlay)))))
 
 (defun vlfi-re-search-forward (regexp count)
   "Search forward for REGEXP prefix COUNT number of times."
