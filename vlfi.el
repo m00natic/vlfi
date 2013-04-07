@@ -81,11 +81,13 @@
   (set-buffer-modified-p nil)
   (buffer-disable-undo)
   (make-local-variable 'vlfi-batch-size)
+  (put 'vlfi-batch-size 'permanent-local t)
   (make-local-variable 'vlfi-start-pos)
+  (put 'vlfi-start-pos 'permanent-local t)
   (make-local-variable 'vlfi-end-pos)
+  (put 'vlfi-end-pos 'permanent-local t)
   (make-local-variable 'vlfi-file-size)
-  ;; (vlfi-print-vars)
-  )
+  (put 'vlfi-file-size 'permanent-local t))
 
 (defun vlfi-change-batch-size (decrease)
   "Change the buffer-local value of `vlfi-batch-size'.
@@ -378,28 +380,15 @@ successful.  Return nil if nothing found."
     (define-key map "\C-c\C-c" 'vlfi-write)
     (define-key map "\C-c\C-q" 'vlfi-discard-edit)
     map)
-  "Keymap for `vlfi-edit-mode'.")
+  "Keymap for command `vlfi-edit-mode'.")
 
-(define-minor-mode vlfi-edit-mode
-  "Major mode for editing large file chunks." nil "[edit]"
-  vlfi-edit-mode-map
-  (if (or (not arg) (and (numberp arg)
-                         (< arg 0)))
-      (progn (setq buffer-read-only t)
-             (set-buffer-modified-p nil)
-             (buffer-disable-undo))
-    (setq buffer-read-only nil)
-    (buffer-enable-undo)
-    (message (substitute-command-keys
-              "Editing: Type \\[vlfi-write] to write chunk \
-or \\[vlfi-discard-edit] to discard changes."))
-    (vlfi-print-vars)))
-
-(defun vlfi-print-vars ()
-  (message "vlfi-start-pos: %s; vlfi-end-pos: %s; \
-vlfi-batch-size: %s; vlfi-file-size: %s"
-           vlfi-start-pos vlfi-end-pos
-           vlfi-batch-size vlfi-file-size))
+(define-derived-mode vlfi-edit-mode vlfi-mode "VLFI[edit]"
+  "Major mode for editing large file chunks."
+  (setq buffer-read-only nil)
+  (buffer-enable-undo)
+  (message (substitute-command-keys
+            "Editing: Type \\[vlfi-write] to write chunk \
+or \\[vlfi-discard-edit] to discard changes.")))
 
 (defun vlfi-write ()
   "Write current chunk to file.  May overwrite existing content."
@@ -408,12 +397,14 @@ vlfi-batch-size: %s; vlfi-file-size: %s"
             (y-or-n-p "Changed size of original chunk.  \
 End of chunk will be garbled.  Continue? "))
     (write-region nil nil buffer-file-name vlfi-start-pos)
-    (vlfi-edit-mode -1)))
+    (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)
+    (vlfi-mode)))
 
 (defun vlfi-discard-edit ()
   "Discard edit and refresh chunk from file."
   (interactive)
-  (vlfi-edit-mode -1)
+  (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)
+  (vlfi-mode)
   (message "Switched to VLFI mode."))
 
 (provide 'vlfi)
