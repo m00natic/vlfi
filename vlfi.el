@@ -393,6 +393,7 @@ successful.  Return nil if nothing found."
   "Major mode for editing large file chunks."
   (setq buffer-read-only nil)
   (buffer-enable-undo)
+  (add-hook 'write-contents-functions 'vlfi-write)
   (message (substitute-command-keys
             "Editing: Type \\[vlfi-write] to write chunk \
 or \\[vlfi-discard-edit] to discard changes.")))
@@ -405,7 +406,8 @@ or \\[vlfi-discard-edit] to discard changes.")))
 End of chunk will be garbled.  Continue? "))
     (write-region nil nil buffer-file-name vlfi-start-pos)
     (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)
-    (vlfi-mode)))
+    (vlfi-mode))
+  t)
 
 (defun vlfi-discard-edit ()
   "Discard edit and refresh chunk from file."
