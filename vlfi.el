@@ -1,5 +1,4 @@
-;;; vlfi.el --- View Large Files Improved
-;;; -*- lexical-bind: t -*-
+;;; vlfi.el --- View Large Files Improved  -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2006, 2012, 2013  Free Software Foundation, Inc.
 
@@ -63,12 +62,8 @@
         (vlfi-change-batch-size t)))
     (define-key map "s" 'vlfi-re-search-forward)
     (define-key map "r" 'vlfi-re-search-backward)
-    (define-key map "]" (lambda () "Jump to end of file content."
-                          (interactive)
-                          (vlfi-insert-file buffer-file-name t)))
-    (define-key map "[" (lambda () "Jump to beginning of file content."
-                          (interactive)
-                          (vlfi-insert-file buffer-file-name)))
+    (define-key map "[" 'vlfi-beginning-of-file)
+    (define-key map "]" 'vlfi-end-of-file)
     (define-key map "e" 'vlfi-edit-mode)
     map)
   "Keymap for `vlfi-mode'.")
@@ -180,10 +175,12 @@ Adjust according to file start/end and show `vlfi-batch-size' bytes."
             (nth 7 (file-attributes buffer-file-name))
             vlfi-end-pos (min vlfi-end-pos vlfi-file-size)
             vlfi-start-pos (max 0 (- vlfi-end-pos vlfi-batch-size))))
-  (let ((inhibit-read-only t))
+  (let ((inhibit-read-only t)
+        (pos (point)))
     (erase-buffer)
     (insert-file-contents buffer-file-name nil
-                          vlfi-start-pos vlfi-end-pos))
+                          vlfi-start-pos vlfi-end-pos)
+    (goto-char pos))
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
 
@@ -194,15 +191,17 @@ Adjust according to file start/end and show `vlfi-batch-size' bytes."
                                 (file-attributes buffer-file-name))))
   (setq vlfi-start-pos (max 0 start)
         vlfi-end-pos (min end vlfi-file-size))
-  (let ((inhibit-read-only t))
+  (let ((inhibit-read-only t)
+        (pos (point)))
     (erase-buffer)
     (insert-file-contents buffer-file-name nil
-                          vlfi-start-pos vlfi-end-pos))
+                          vlfi-start-pos vlfi-end-pos)
+    (goto-char pos))
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
 
-(defun vlfi-insert-file (file &optional from-end)
-  "Insert first chunk of FILE contents in current buffer.
+(defun vlfi-insert-file (&optional from-end)
+  "Insert first chunk of current file contents in current buffer.
 With FROM-END prefix, start from the back."
   (if from-end
       (setq vlfi-start-pos (max 0 (- vlfi-file-size vlfi-batch-size))
@@ -210,6 +209,16 @@ With FROM-END prefix, start from the back."
     (setq vlfi-start-pos 0
           vlfi-end-pos (min vlfi-batch-size vlfi-file-size)))
   (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos))
+
+(defun vlfi-beginning-of-file ()
+  "Jump to beginning of file content."
+  (interactive)
+  (vlfi-insert-file))
+
+(defun vlfi-end-of-file ()
+  "Jump to end of file content."
+  (interactive)
+  (vlfi-insert-file t))
 
 ;;;###autoload
 (defun vlfi (file &optional from-end)
@@ -221,7 +230,7 @@ buffer.  You can customize number of bytes displayed by customizing
   (with-current-buffer (generate-new-buffer "*vlfi*")
     (setq buffer-file-name file
           vlfi-file-size (nth 7 (file-attributes file)))
-    (vlfi-insert-file file from-end)
+    (vlfi-insert-file from-end)
     (vlfi-mode)
     (switch-to-buffer (current-buffer))))
 
