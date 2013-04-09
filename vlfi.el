@@ -363,7 +363,8 @@ successful.  Return nil if nothing found."
         (delete-overlay overlay)))))
 
 (defun vlfi-re-search-forward (regexp count)
-  "Search forward for REGEXP prefix COUNT number of times."
+  "Search forward for REGEXP prefix COUNT number of times.
+Search is performed chunk by chunk in `vlfi-batch-size' memory."
   (interactive (list (read-regexp "Search whole file"
                                   (if regexp-history
                                       (car regexp-history))
@@ -372,7 +373,8 @@ successful.  Return nil if nothing found."
   (vlfi-re-search regexp count nil))
 
 (defun vlfi-re-search-backward (regexp count)
-  "Search backward for REGEXP prefix COUNT number of times."
+  "Search backward for REGEXP prefix COUNT number of times.
+Search is performed chunk by chunk in `vlfi-batch-size' memory."
   (interactive (list (read-regexp "Search whole file backward"
                                   (if regexp-history
                                       (car regexp-history))
