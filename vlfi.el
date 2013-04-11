@@ -50,6 +50,7 @@
 (defvar vlfi-end-pos vlfi-batch-size
   "Absolute position of the visible chunk end.")
 (defvar vlfi-file-size 0 "Total size of presented file.")
+(defvar vlfi-buffer-size 0 "Buffer size of current chunk.")
 
 (defvar vlfi-mode-map
   (let ((map (make-sparse-keymap)))
@@ -81,7 +82,9 @@
   (make-local-variable 'vlfi-end-pos)
   (put 'vlfi-end-pos 'permanent-local t)
   (make-local-variable 'vlfi-file-size)
-  (put 'vlfi-file-size 'permanent-local t))
+  (put 'vlfi-file-size 'permanent-local t)
+  (make-local-variable 'vlfi-buffer-size)
+  (put 'vlfi-buffer-size 'permanent-local t))
 
 (defun vlfi-change-batch-size (decrease)
   "Change the buffer-local value of `vlfi-batch-size'.
@@ -135,7 +138,8 @@ When prefix argument is negative
                               vlfi-start-pos)
                             end)
       (goto-char pos))
-    (setq vlfi-end-pos end))
+    (setq vlfi-end-pos end
+          vlfi-buffer-size (buffer-size)))
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
 
@@ -162,7 +166,8 @@ When prefix argument is negative
                               vlfi-start-pos
                             vlfi-end-pos))
     (goto-char (- (point-max) pos))
-    (setq vlfi-start-pos start))
+    (setq vlfi-start-pos start
+          vlfi-buffer-size (buffer-size)))
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
 
@@ -182,6 +187,7 @@ Adjust according to file start/end and show `vlfi-batch-size' bytes."
     (insert-file-contents buffer-file-name nil
                           vlfi-start-pos vlfi-end-pos)
     (goto-char pos))
+  (setq vlfi-buffer-size (buffer-size))
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
 
@@ -198,6 +204,7 @@ Adjust according to file start/end and show `vlfi-batch-size' bytes."
     (insert-file-contents buffer-file-name nil
                           vlfi-start-pos vlfi-end-pos)
     (goto-char pos))
+  (setq vlfi-buffer-size (buffer-size))
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
 
@@ -413,7 +420,7 @@ If changing size of chunk, may load the remaining part of file first."
   (interactive)
   (when (and (derived-mode-p 'vlfi-mode)
              (buffer-modified-p))
-    (let ((size-change (- vlfi-end-pos vlfi-start-pos (buffer-size))))
+    (let ((size-change (- vlfi-buffer-size (buffer-size))))
       (if (zerop size-change)
           (vlfi-write-1)
         (setq vlfi-file-size (nth 7
