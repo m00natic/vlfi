@@ -443,6 +443,12 @@ Remaining part of the file ["
   (vlfi-mode)
   (message "Switched to VLFI mode."))
 
+;;; non recent Emacs
+(unless (fboundp 'file-size-human-readable)
+  (defun file-size-human-readable (file-size)
+    "Print FILE-SIZE in MB."
+    (format "%.1fMB" (/ file-size 1024.0))))
+
 (provide 'vlfi)
 
 ;;; vlfi.el ends here
