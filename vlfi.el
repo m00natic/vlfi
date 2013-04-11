@@ -75,6 +75,7 @@
   (set-buffer-modified-p nil)
   (buffer-disable-undo)
   (add-hook 'write-contents-functions 'vlfi-write)
+  (setq revert-buffer-function 'vlfi-revert)
   (make-local-variable 'vlfi-batch-size)
   (put 'vlfi-batch-size 'permanent-local t)
   (make-local-variable 'vlfi-start-pos)
@@ -241,6 +242,11 @@ buffer.  You can customize number of bytes displayed by customizing
     (vlfi-insert-file from-end)
     (vlfi-mode)
     (switch-to-buffer (current-buffer))))
+
+(defun vlfi-revert (&rest args)
+  "Revert current chunk.  Ignore ARGS."
+  (ignore args)
+  (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos))
 
 ;;;###autoload
 (defun dired-vlfi (from-end)
