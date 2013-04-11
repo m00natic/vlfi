@@ -264,11 +264,14 @@ OP-TYPE specifies the file operation being performed over FILENAME."
          (while (not (memq (setq char
                                  (read-event
                                   (propertize
-                                   (format "File %s is large (%s): \
+                                   (format
+                                    "File %s is large (%s): \
 %s normally (o), %s with vlfi (v) or abort (a)"
-                                           (file-name-nondirectory filename)
-                                           (file-size-human-readable size)
-                                           op-type op-type)
+                                    (if filename
+                                        (file-name-nondirectory filename)
+                                      "")
+                                    (file-size-human-readable size)
+                                    op-type op-type)
                                    'face 'minibuffer-prompt)))
                            '(?o ?O ?v ?V ?a ?A))))
          (cond ((memq char '(?o ?O)))
