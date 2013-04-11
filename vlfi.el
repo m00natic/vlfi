@@ -101,10 +101,11 @@ with the prefix argument DECREASE it is halved."
 
 (defun vlfi-format-buffer-name ()
   "Return format for vlfi buffer name."
-  (format "%s(%s)[%.2f%%%%](%d)"
+  (format "%s(%s)[%d/%d](%d)"
           (file-name-nondirectory buffer-file-name)
           (file-size-human-readable vlfi-file-size)
-          (/ (* 100 vlfi-end-pos) (float vlfi-file-size))
+          (/ vlfi-end-pos vlfi-batch-size)
+          (/ vlfi-file-size vlfi-batch-size)
           vlfi-batch-size))
 
 (defun vlfi-update-buffer-name ()
@@ -120,7 +121,7 @@ When prefix argument is negative
   (interactive "p")
   (let ((end (+ vlfi-end-pos (* vlfi-batch-size
                                 (abs append)))))
-    (when (< vlfi-file-size end)		; re-check file size
+    (when (< vlfi-file-size end)        ; re-check file size
       (setq vlfi-file-size (nth 7 (file-attributes buffer-file-name)))
       (cond ((= vlfi-end-pos vlfi-file-size)
              (error "Already at EOF"))
@@ -197,7 +198,7 @@ Adjust according to file start/end and show `vlfi-batch-size' bytes."
 
 (defun vlfi-move-to-chunk (start end)
   "Move to chunk determined by START END."
-  (if (< vlfi-file-size end)          ; re-check file size
+  (if (< vlfi-file-size end)            ; re-check file size
       (setq vlfi-file-size (nth 7
                                 (file-attributes buffer-file-name))))
   (setq vlfi-start-pos (max 0 start)
@@ -452,7 +453,7 @@ Remaining part of the file ["
                  (goto-char (point-max))
                  (insert-file-contents buffer-file-name nil
                                        vlfi-end-pos vlfi-file-size)
-                 (when (< 0 size-change)  ; pad with empty characters
+                 (when (< 0 size-change) ; pad with empty characters
                    (goto-char (point-max))
                    (insert-char 32 size-change))
                  (vlfi-write-1)
