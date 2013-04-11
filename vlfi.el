@@ -400,34 +400,41 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
             "Editing: Type \\[vlfi-write] to write chunk \
 or \\[vlfi-discard-edit] to discard changes.")))
 
+(defun vlfi-write-1 ()
+  "Append current buffer content to `vlfi-start-pos' position in file.
+Reopen last viewed chunk."
+  (write-region nil nil buffer-file-name vlfi-start-pos t)
+  (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)
+  (vlfi-mode))
+
 (defun vlfi-write ()
-  "Write current chunk to file.
+  "Write current chunk to file.  Always return true to disable save.
 If changing size of chunk, may load the remaining part of file first."
   (interactive)
-  (let ((size-change (- vlfi-end-pos vlfi-start-pos (buffer-size))))
-    (cond ((zerop size-change)
-           (write-region nil nil buffer-file-name vlfi-start-pos t)
-           (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)
-           (vlfi-mode))
-          ((y-or-n-p "Changed size of original chunk.  \
-Remaining part of the file has to be loaded.  Continue? ")
-           (let ((pos (point)))
-             (goto-char (point-max))
-             (setq vlfi-file-size
-                   (nth 7 (file-attributes buffer-file-name)))
-             (let ((load-reporter (make-progress-reporter
-                                   "Loading rest of the file")))
-               (insert-file-contents buffer-file-name nil
-                                     vlfi-end-pos vlfi-file-size)
-               (when (< 0 size-change)  ; pad with empty characters
+  (when (and (derived-mode-p 'vlfi-mode)
+             (buffer-modified-p))
+    (let ((size-change (- vlfi-end-pos vlfi-start-pos (buffer-size))))
+      (if (zerop size-change)
+          (vlfi-write-1)
+        (setq vlfi-file-size (nth 7
+                                  (file-attributes buffer-file-name)))
+        (cond ((= vlfi-file-size vlfi-end-pos)
+               (vlfi-write-1))
+              ((y-or-n-p (concat "Changed size of original chunk.  \
+Remaining part of the file ["
+                                 (file-size-human-readable
+                                  (- vlfi-file-size vlfi-end-pos))
+                                 "] has to be loaded.  Continue? "))
+               (let ((pos (point)))
                  (goto-char (point-max))
-                 (insert-char 32 size-change))
-               (progress-reporter-done load-reporter))
-             (write-region nil nil buffer-file-name vlfi-start-pos t)
-             (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)
-             (goto-char pos))
-           (vlfi-mode))))
-  t)
+                 (insert-file-contents buffer-file-name nil
+                                       vlfi-end-pos vlfi-file-size)
+                 (when (< 0 size-change)  ; pad with empty characters
+                   (goto-char (point-max))
+                   (insert-char 32 size-change))
+                 (vlfi-write-1)
+                 (goto-char pos))))))
+    t))
 
 (defun vlfi-discard-edit ()
   "Discard edit and refresh chunk from file."
