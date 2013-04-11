@@ -141,6 +141,7 @@ When prefix argument is negative
       (goto-char pos))
     (setq vlfi-end-pos end
           vlfi-buffer-size (buffer-size)))
+  (set-visited-file-modtime)
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
 
@@ -169,6 +170,7 @@ When prefix argument is negative
     (goto-char (- (point-max) pos))
     (setq vlfi-start-pos start
           vlfi-buffer-size (buffer-size)))
+  (set-visited-file-modtime)
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
 
@@ -189,6 +191,7 @@ Adjust according to file start/end and show `vlfi-batch-size' bytes."
                           vlfi-start-pos vlfi-end-pos)
     (goto-char pos))
   (setq vlfi-buffer-size (buffer-size))
+  (set-visited-file-modtime)
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
 
@@ -206,6 +209,7 @@ Adjust according to file start/end and show `vlfi-batch-size' bytes."
                           vlfi-start-pos vlfi-end-pos)
     (goto-char pos))
   (setq vlfi-buffer-size (buffer-size))
+  (set-visited-file-modtime)
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
 
@@ -428,7 +432,10 @@ Reopen last viewed chunk."
 If changing size of chunk, may load the remaining part of file first."
   (interactive)
   (when (and (derived-mode-p 'vlfi-mode)
-             (buffer-modified-p))
+             (buffer-modified-p)
+             (or (verify-visited-file-modtime)
+                 (y-or-n-p "File has changed since visited or \
+saved.  Save anyway? ")))
     (let ((size-change (- vlfi-buffer-size (buffer-size))))
       (if (zerop size-change)
           (vlfi-write-1)
