@@ -73,6 +73,7 @@
   (setq buffer-read-only t)
   (set-buffer-modified-p nil)
   (buffer-disable-undo)
+  (add-hook 'write-contents-functions 'vlfi-write)
   (make-local-variable 'vlfi-batch-size)
   (put 'vlfi-batch-size 'permanent-local t)
   (make-local-variable 'vlfi-start-pos)
@@ -395,7 +396,6 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
   "Major mode for editing large file chunks."
   (setq buffer-read-only nil)
   (buffer-enable-undo)
-  (add-hook 'write-contents-functions 'vlfi-write)
   (message (substitute-command-keys
             "Editing: Type \\[vlfi-write] to write chunk \
 or \\[vlfi-discard-edit] to discard changes.")))
