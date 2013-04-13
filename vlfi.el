@@ -415,8 +415,9 @@ or \\[vlfi-discard-edit] to discard changes.")))
 
 (defun vlfi-file-shift-back (size-change)
   "Shift file contents SIZE-CHANGE bytes back."
-  (write-region nil nil buffer-file-name vlfi-start-pos t)
   (let ((coding-system buffer-file-coding-system))
+    (set-buffer-file-coding-system 'raw-text t)
+    (write-region nil nil buffer-file-name vlfi-start-pos t)
     (setq buffer-file-coding-system nil)
     (let ((read-start-pos vlfi-end-pos)
           (reporter (make-progress-reporter "Adjusting file content"
@@ -447,8 +448,58 @@ back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
     (< read-end vlfi-file-size)))
 
 (defun vlfi-file-shift-forward (size-change)
-  "Shift file contents SIZE-CHANGE bytes forward."
-  (ignore size-change))
+  "Shift file contents SIZE-CHANGE bytes forward.
+Done by saving content up front and then writing previous batch."
+  (let ((vlfi-buffer (current-buffer))
+        (temp-buffer (generate-new-buffer (concat " "
+                                                  (buffer-name))))
+        (coding-system buffer-file-coding-system))
+    (let ((file buffer-file-name))
+      (set-buffer temp-buffer)
+      (setq buffer-file-name file))
+    (set-buffer vlfi-buffer)
+    (set-buffer-file-coding-system 'raw-text t)
+    (let ((read-buffer temp-buffer)
+          (write-buffer vlfi-buffer)
+          (size (+ vlfi-batch-size size-change))
+          (read-pos vlfi-end-pos)
+          (write-pos vlfi-start-pos)
+          swap-buffer
+          (reporter (make-progress-reporter "Adjusting file content"
+                                            vlfi-start-pos
+                                            vlfi-file-size)))
+      (while (vlfi-shift-batches size read-buffer read-pos
+                                 write-buffer write-pos)
+        (setq swap-buffer read-buffer
+              read-buffer write-buffer
+              write-buffer swap-buffer
+              write-pos (+ read-pos size-change)
+              read-pos (+ read-pos size))
+        (progress-reporter-update reporter write-pos))
+      (progress-reporter-done reporter))
+    (kill-buffer temp-buffer)
+    (set-buffer vlfi-buffer)
+    (setq buffer-file-coding-system coding-system)))
+
+(defun vlfi-shift-batches (size read-buffer read-pos
+                                write-buffer write-pos)
+  "Read SIZE bytes in READ-BUFFER starting from READ-POS.
+Then write contents of WRITE-BUFFER to buffer file at WRITE-POS.
+Return nil if EOF is reached, t otherwise."
+  (let* ((file-size (nth 7 (file-attributes buffer-file-name)))
+         (read-more (< read-pos file-size)))
+    (when read-more
+      ;; read
+      (set-buffer read-buffer)
+      (erase-buffer)
+      (setq buffer-file-coding-system nil)
+      (insert-file-contents-literally buffer-file-name nil read-pos
+                                      (min file-size (+ read-pos
+                                                        size))))
+    ;; write
+    (set-buffer write-buffer)
+    (write-region nil nil buffer-file-name write-pos t)
+    read-more))
 
 (defun vlfi-write ()
   "Write current chunk to file.  Always return true to disable save.
@@ -468,7 +519,7 @@ Save anyway? ")))
              (write-region nil nil buffer-file-name vlfi-start-pos t))
             ((< 0 size-change)
              (vlfi-file-shift-back size-change))
-            (t (vlfi-file-shift-forward size-change)))
+            (t (vlfi-file-shift-forward (- size-change))))
       (goto-char pos))
     (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)
     (vlfi-mode)
