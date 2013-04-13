@@ -474,11 +474,18 @@ Save anyway? ")))
     (vlfi-mode)
     t))
 
+(defun vlfi-prepare-write-buffer ()
+  "Optimize buffer for a lot of insert/erasure."
+  (setq delay-mode-hooks t)
+  (fundamental-mode)
+  (buffer-disable-undo))
+
 (defun vlfi-file-shift-back (size-change)
   "Shift file contents SIZE-CHANGE bytes back."
   (let ((coding-system buffer-file-coding-system))
     (write-region nil nil buffer-file-name vlfi-start-pos t)
     (setq buffer-file-coding-system nil)
+    (vlfi-prepare-write-buffer)
     (let ((read-start-pos vlfi-end-pos)
           (reporter (make-progress-reporter "Adjusting file content"
                                             vlfi-end-pos
@@ -516,8 +523,10 @@ Done by saving content up front and then writing previous batch."
         (coding-system buffer-file-coding-system))
     (let ((file buffer-file-name))
       (set-buffer temp-buffer)
-      (setq buffer-file-name file))
+      (setq buffer-file-name file)
+      (vlfi-prepare-write-buffer))
     (set-buffer vlfi-buffer)
+    (vlfi-prepare-write-buffer)
     (let ((read-buffer temp-buffer)
           (write-buffer vlfi-buffer)
           (size (+ vlfi-batch-size size-change))
