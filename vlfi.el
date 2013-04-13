@@ -459,18 +459,18 @@ If changing size of chunk shift remaining file content."
              (or (verify-visited-file-modtime)
                  (y-or-n-p "File has changed since visited or saved.  \
 Save anyway? ")))
-    (let ((size-change (- vlfi-end-pos vlfi-start-pos
+    (let ((pos (point))
+          (size-change (- vlfi-end-pos vlfi-start-pos
                           (length (encode-coding-region
                                    (point-min) (point-max)
-                                   buffer-file-coding-system t))))
-          (pos (point)))
+                                   buffer-file-coding-system t)))))
       (cond ((zerop size-change)
              (write-region nil nil buffer-file-name vlfi-start-pos t))
             ((< 0 size-change)
              (vlfi-file-shift-back size-change))
             (t (vlfi-file-shift-forward (- size-change))))
+      (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)
       (goto-char pos))
-    (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)
     (vlfi-mode)
     t))
 
