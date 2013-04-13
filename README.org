@@ -14,3 +14,9 @@ improvements:
   meanwhile
 - vlfi is added as an option when opening large files
 
+* Known issues
+
+- When chunk starts with only part of multi-byte character, encoding
+  for this chunk is clobbered visibly, don't edit/save in such case.
+  Workaround is to move back to the first non-clobbered chunk and
+  enlarge batch size until this chunk comes into range.
