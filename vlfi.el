@@ -65,6 +65,7 @@
     (define-key map "[" 'vlfi-beginning-of-file)
     (define-key map "]" 'vlfi-end-of-file)
     (define-key map "e" 'vlfi-edit-mode)
+    (define-key map "j" 'vlfi-jump-to-chunk)
     map)
   "Keymap for `vlfi-mode'.")
 
@@ -202,6 +203,11 @@ With FROM-END prefix, start from the back."
   "Revert current chunk.  Ignore ARGS."
   (ignore args)
   (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos))
+
+(defun vlfi-jump-to-chunk (n)
+  "Go to to chunk N."
+  (interactive "nGoto to chunk: ")
+  (vlfi-move-to-batch (* (1- n) vlfi-batch-size)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; batch movement
