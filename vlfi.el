@@ -94,7 +94,7 @@ buffer.  You can customize number of bytes displayed by customizing
   (interactive "fFile to open: \nP")
   (with-current-buffer (generate-new-buffer "*vlfi*")
     (setq buffer-file-name file
-          vlfi-file-size (nth 7 (file-attributes file)))
+          vlfi-file-size (vlfi-get-file-size file))
     (vlfi-insert-file from-end)
     (vlfi-mode)
     (switch-to-buffer (current-buffer))))
@@ -179,6 +179,10 @@ with the prefix argument DECREASE it is halved."
   "Update the current buffer name."
   (rename-buffer (vlfi-format-buffer-name) t))
 
+(defmacro vlfi-get-file-size (file)
+  "Get size in bytes of FILE."
+  `(nth 7 (file-attributes ,file)))
+
 (defun vlfi-insert-file (&optional from-end)
   "Insert first chunk of current file contents in current buffer.
 With FROM-END prefix, start from the back."
@@ -222,7 +226,7 @@ When prefix argument is negative
   (let ((end (+ vlfi-end-pos (* vlfi-batch-size
                                 (abs append)))))
     (when (< vlfi-file-size end)        ; re-check file size
-      (setq vlfi-file-size (nth 7 (file-attributes buffer-file-name)))
+      (setq vlfi-file-size (vlfi-get-file-size buffer-file-name))
       (cond ((= vlfi-end-pos vlfi-file-size)
              (error "Already at EOF"))
             ((< vlfi-file-size end)
@@ -278,8 +282,7 @@ Adjust according to file start/end and show `vlfi-batch-size' bytes."
   (setq vlfi-start-pos (max 0 start)
         vlfi-end-pos (+ vlfi-start-pos vlfi-batch-size))
   (if (< vlfi-file-size vlfi-end-pos)   ; re-check file size
-      (setq vlfi-file-size
-            (nth 7 (file-attributes buffer-file-name))
+      (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)
             vlfi-end-pos (min vlfi-end-pos vlfi-file-size)
             vlfi-start-pos (max 0 (- vlfi-end-pos vlfi-batch-size))))
   (let ((inhibit-read-only t)
@@ -295,8 +298,7 @@ Adjust according to file start/end and show `vlfi-batch-size' bytes."
 (defun vlfi-move-to-chunk (start end)
   "Move to chunk determined by START END."
   (if (< vlfi-file-size end)            ; re-check file size
-      (setq vlfi-file-size (nth 7
-                                (file-attributes buffer-file-name))))
+      (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
   (setq vlfi-start-pos (max 0 start)
         vlfi-end-pos (min end vlfi-file-size))
   (let ((inhibit-read-only t)
@@ -497,7 +499,7 @@ Save anyway? ")))
   "Read `vlfi-batch-size' bytes from READ-POS and write them \
 back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
   (erase-buffer)
-  (setq vlfi-file-size (nth 7 (file-attributes buffer-file-name)))
+  (setq vlfi-file-size (vlfi-get-file-size buffer-file-name))
   (let ((read-end (+ read-pos vlfi-batch-size)))
     (insert-file-contents-literally buffer-file-name nil
                                     read-pos
@@ -543,7 +545,7 @@ Done by saving content up front and then writing previous batch."
   "Read SIZE bytes in READ-BUFFER starting from READ-POS.
 Then write contents of WRITE-BUFFER to buffer file at WRITE-POS.
 Return nil if EOF is reached, t otherwise."
-  (let* ((file-size (nth 7 (file-attributes buffer-file-name)))
+  (let* ((file-size (vlfi-get-file-size buffer-file-name))
          (read-more (< read-pos file-size)))
     (when read-more
       ;; read
