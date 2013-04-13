@@ -276,9 +276,10 @@ When prefix argument is negative
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
 
-(defun vlfi-move-to-batch (start)
+(defun vlfi-move-to-batch (start &optional minimal)
   "Move to batch determined by START.
-Adjust according to file start/end and show `vlfi-batch-size' bytes."
+Adjust according to file start/end and show `vlfi-batch-size' bytes.
+When given MINIMAL flag, skip non important operations."
   (setq vlfi-start-pos (max 0 start)
         vlfi-end-pos (+ vlfi-start-pos vlfi-batch-size))
   (if (< vlfi-file-size vlfi-end-pos)   ; re-check file size
@@ -291,12 +292,14 @@ Adjust according to file start/end and show `vlfi-batch-size' bytes."
     (insert-file-contents buffer-file-name nil
                           vlfi-start-pos vlfi-end-pos)
     (goto-char pos))
-  (set-visited-file-modtime)
   (set-buffer-modified-p nil)
-  (vlfi-update-buffer-name))
+  (unless minimal
+    (set-visited-file-modtime)
+    (vlfi-update-buffer-name)))
 
-(defun vlfi-move-to-chunk (start end)
-  "Move to chunk determined by START END."
+(defun vlfi-move-to-chunk (start end &optional minimal)
+  "Move to chunk determined by START END.
+When given MINIMAL flag, skip non important operations."
   (if (< vlfi-file-size end)            ; re-check file size
       (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
   (setq vlfi-start-pos (max 0 start)
@@ -307,9 +310,10 @@ Adjust according to file start/end and show `vlfi-batch-size' bytes."
     (insert-file-contents buffer-file-name nil
                           vlfi-start-pos vlfi-end-pos)
     (goto-char pos))
-  (set-visited-file-modtime)
   (set-buffer-modified-p nil)
-  (vlfi-update-buffer-name))
+  (unless minimal
+    (set-visited-file-modtime)
+    (vlfi-update-buffer-name)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; search
@@ -344,7 +348,7 @@ Adjust according to file start/end and show `vlfi-batch-size' bytes."
                            (vlfi-move-to-batch
                             (if (< match-start-pos batch-move)
                                 (- match-start-pos vlfi-batch-size)
-                              batch-move)))
+                              batch-move) t))
                          (goto-char (if (< match-start-pos
                                            vlfi-end-pos)
                                         (- match-start-pos
@@ -365,7 +369,7 @@ Adjust according to file start/end and show `vlfi-batch-size' bytes."
                          (vlfi-move-to-batch
                           (if (< batch-move match-end-pos)
                               match-end-pos
-                            batch-move)))
+                            batch-move) t))
                        (goto-char (if (< vlfi-start-pos match-end-pos)
                                       (- match-end-pos vlfi-start-pos)
                                     (point-min)))
@@ -383,9 +387,9 @@ Adjust according to file start/end and show `vlfi-batch-size' bytes."
 According to COUNT and left TO-FIND, show if search has been
 successful.  Return nil if nothing found."
   (let ((success (zerop to-find)))
-    (or success
-        (vlfi-move-to-batch (- match-pos-start
-                               (/ vlfi-batch-size 2))))
+    (if success
+        (vlfi-update-buffer-name)
+      (vlfi-move-to-batch (- match-pos-start (/ vlfi-batch-size 2))))
     (let* ((match-end (- match-pos-end vlfi-start-pos))
            (overlay (make-overlay (- match-pos-start vlfi-start-pos)
                                   match-end)))
