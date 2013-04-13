@@ -66,6 +66,7 @@
     (define-key map "]" 'vlfi-end-of-file)
     (define-key map "e" 'vlfi-edit-mode)
     (define-key map "j" 'vlfi-jump-to-chunk)
+    (define-key map "l" 'vlfi-goto-line)
     map)
   "Keymap for `vlfi-mode'.")
 
@@ -424,6 +425,22 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
                                   'regexp-history)
                      (or current-prefix-arg 1)))
   (vlfi-re-search regexp count t))
+
+(defun vlfi-goto-line (n)
+  "Go to line N."
+  (interactive "nGo to line: ")
+  (let ((start-pos vlfi-start-pos)
+        (end-pos vlfi-end-pos)
+        (pos (point))
+        (success nil))
+    (unwind-protect
+        (progn (vlfi-beginning-of-file)
+               (goto-char (point-min))
+               (setq success (vlfi-re-search-forward "[\n\C-m]"
+                                                     (1- n))))
+      (unless success
+        (vlfi-move-to-chunk start-pos end-pos)
+        (goto-char pos)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; editing
