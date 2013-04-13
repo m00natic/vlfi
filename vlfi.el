@@ -146,6 +146,25 @@ OP-TYPE specifies the file operation being performed over FILENAME."
 ;;;###autoload
 (fset 'abort-if-file-too-large 'vlfi-if-file-too-large)
 
+;; scroll auto batching
+(defadvice scroll-up (around vlfi-scroll-up
+                             activate compile)
+  "Slide to next batch if at end of buffer in `vlfi-mode'."
+  (if (and (eq major-mode 'vlfi-mode)
+           (eobp))
+      (progn (vlfi-next-batch 1)
+             (goto-char (point-min)))
+    ad-do-it))
+
+(defadvice scroll-down (around vlfi-scroll-down
+                               activate compile)
+  "Slide to previous batch if at beginning of buffer  in `vlfi-mode'."
+  (if (and (eq major-mode 'vlfi-mode)
+           (bobp))
+      (progn (vlfi-prev-batch 1)
+             (goto-char (point-max)))
+    ad-do-it))
+
 ;; non recent Emacs
 (unless (fboundp 'file-size-human-readable)
   (defun file-size-human-readable (file-size)
