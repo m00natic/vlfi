@@ -1,13 +1,16 @@
-* View Large File Improved
+* View Large Files Improved
 
 An Emacs mode that allows viewing files in chunks.  This is a fork
-that builds on the GNU ELPA vlf.el.  It adds the following
+that builds on the bare bones GNU ELPA vlf.el.  It adds the following
 improvements:
 
-- by chunk search
-- chunk editing
-- options to jump to end or beginning of file
+- regular expression search on whole file (in constant memory
+  determined by current batch size)
+- chunk editing (if size has changed, saving is done in constant
+  memory determined by current batch size)
+- options to jump to beginning, end or arbitrary file chunk
 - ability to jump/insert given number of batches at once
-- ability to view newly added content if the file has grown meanwhile
+- newly added content is acknowledged if file has changed size
+  meanwhile
 - vlfi is added as an option when opening large files
 

@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2006, 2012, 2013  Free Software Foundation, Inc.
 
-;; Version: 0.5
+;; Version: 0.6
 ;; Keywords: large files, utilities
 ;; Authors: 2006 Mathias Dahl <mathias.dahl@gmail.com>
 ;;          2012 Sam Steingold <sds@gnu.org>
