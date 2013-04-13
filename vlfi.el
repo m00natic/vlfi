@@ -413,47 +413,65 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
 	    "Editing: Type \\[vlfi-write] to write chunk \
 or \\[vlfi-discard-edit] to discard changes.")))
 
-(defun vlfi-write-1 ()
-  "Append current buffer content to `vlfi-start-pos' position in file.
-Reopen last viewed chunk."
+(defun vlfi-file-shift-back (size-change)
+  "Shift file contents SIZE-CHANGE bytes back."
   (write-region nil nil buffer-file-name vlfi-start-pos t)
-  (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)
-  (vlfi-mode))
+  (let ((coding-system buffer-file-coding-system))
+    (setq buffer-file-coding-system nil)
+    (let ((read-start-pos vlfi-end-pos)
+          (reporter (make-progress-reporter "Adjusting file content"
+                                            vlfi-end-pos
+                                            vlfi-file-size)))
+      (while (vlfi-shift-batch read-start-pos (- read-start-pos
+                                                 size-change))
+        (setq read-start-pos (+ read-start-pos vlfi-batch-size))
+        (progress-reporter-update reporter read-start-pos))
+      ;; pad end with space
+      (erase-buffer)
+      (insert-char 32 size-change)
+      (write-region nil nil buffer-file-name (- vlfi-file-size
+                                                size-change))
+      (progress-reporter-done reporter))
+    (setq buffer-file-coding-system coding-system)))
+
+(defun vlfi-shift-batch (read-pos write-pos)
+  "Read `vlfi-batch-size' bytes from READ-POS and write them \
+back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
+  (erase-buffer)
+  (setq vlfi-file-size (nth 7 (file-attributes buffer-file-name)))
+  (let ((read-end (+ read-pos vlfi-batch-size)))
+    (insert-file-contents-literally buffer-file-name nil
+                                    read-pos
+                                    (min vlfi-file-size read-end))
+    (write-region nil nil buffer-file-name write-pos t)
+    (< read-end vlfi-file-size)))
+
+(defun vlfi-file-shift-forward (size-change)
+  "Shift file contents SIZE-CHANGE bytes forward."
+  (ignore size-change))
 
 (defun vlfi-write ()
   "Write current chunk to file.  Always return true to disable save.
-If changing size of chunk, may load the remaining part of file first."
+If changing size of chunk shift remaining file content."
   (interactive)
   (when (and (derived-mode-p 'vlfi-mode)
-	     (buffer-modified-p)
-	     (or (verify-visited-file-modtime)
-		 (y-or-n-p "File has changed since visited or \
-saved.  Save anyway? ")))
+             (buffer-modified-p)
+             (or (verify-visited-file-modtime)
+                 (y-or-n-p "File has changed since visited or saved.  \
+Save anyway? ")))
     (let ((size-change (- vlfi-end-pos vlfi-start-pos
-			  (length
-			   (encode-coding-region
-			    (point-min) (point-max)
-			    buffer-file-coding-system t)))))
-      (if (zerop size-change)
-	  (vlfi-write-1)
-	(setq vlfi-file-size (nth 7
-				  (file-attributes buffer-file-name)))
-	(cond ((= vlfi-file-size vlfi-end-pos)
-	       (vlfi-write-1))
-	      ((y-or-n-p (concat "Changed size of original chunk.  \
-Remaining part of the file ["
-				 (file-size-human-readable
-				  (- vlfi-file-size vlfi-end-pos))
-				 "] has to be loaded.  Continue? "))
-	       (let ((pos (point)))
-		 (goto-char (point-max))
-		 (insert-file-contents buffer-file-name nil
-				       vlfi-end-pos vlfi-file-size)
-		 (when (< 0 size-change) ; pad with empty characters
-		   (goto-char (point-max))
-		   (insert-char 32 size-change))
-		 (vlfi-write-1)
-		 (goto-char pos))))))
+                          (length (encode-coding-region
+                                   (point-min) (point-max)
+                                   buffer-file-coding-system t))))
+          (pos (point)))
+      (cond ((zerop size-change)
+             (write-region nil nil buffer-file-name vlfi-start-pos t))
+            ((< 0 size-change)
+             (vlfi-file-shift-back size-change))
+            (t (vlfi-file-shift-forward size-change)))
+      (goto-char pos))
+    (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)
+    (vlfi-mode)
     t))
 
 (defun vlfi-discard-edit ()
