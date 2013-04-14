@@ -461,16 +461,22 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
         (vlfi-move-to-chunk start-pos end-pos)
         (goto-char pos)))))
 
-(defun vlfi-adjust-chunk (bytes)
-  "Adjust chunk beginning by BYTES."
-  (interactive "p")
+(defun vlfi-adjust-chunk ()
+  "Adjust chunk beginning until content can be properly decoded."
+  (interactive)
   (or (zerop vlfi-start-pos)
-      (let ((pos (+ (point) bytes)))
-        (setq vlfi-start-pos (- vlfi-start-pos bytes))
-        (let ((inhibit-read-only t))
-          (erase-buffer)
-          (insert-file-contents buffer-file-name nil
-                                vlfi-start-pos vlfi-end-pos))
+      (let ((pos (point)))
+        (while (/= (- vlfi-end-pos vlfi-start-pos)
+                   (length (encode-coding-region
+                            (point-min) (point-max)
+                            buffer-file-coding-system t)))
+
+          (setq pos (1- pos)
+                vlfi-start-pos (1- vlfi-start-pos))
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (insert-file-contents buffer-file-name nil
+                                  vlfi-start-pos vlfi-end-pos)))
         (set-buffer-modified-p nil)
         (goto-char pos))))
 
