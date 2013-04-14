@@ -252,7 +252,7 @@ When prefix argument is negative
              (setq end vlfi-file-size))))
     (let ((inhibit-read-only t)
           (do-append (< append 0))
-          (pos (point)))
+          (pos (position-bytes (point))))
       (if do-append
           (goto-char (point-max))
         (setq vlfi-start-pos (- end vlfi-batch-size))
@@ -261,9 +261,9 @@ When prefix argument is negative
                                                      vlfi-end-pos
                                                    vlfi-start-pos)
                             end)
-      (goto-char pos))
-    (setq vlfi-end-pos end))
-  (vlfi-adjust-chunk)
+      (setq vlfi-end-pos end)
+      (goto-char (or (byte-to-position (+ pos (vlfi-adjust-chunk)))
+                     (point-max)))))
   (set-visited-file-modtime)
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
@@ -281,7 +281,8 @@ When prefix argument is negative
         (start (max 0 (- vlfi-start-pos (* vlfi-batch-size
                                            (abs prepend)))))
         (do-prepend (< prepend 0))
-        (pos (- (point-max) (point))))
+        (pos (- (position-bytes (point-max))
+                (position-bytes (point)))))
     (if do-prepend
         (goto-char (point-min))
       (setq vlfi-end-pos (+ start vlfi-batch-size))
@@ -291,8 +292,10 @@ When prefix argument is negative
                               vlfi-start-pos
                             vlfi-end-pos))
     (setq vlfi-start-pos start)
-    (vlfi-adjust-chunk)
-    (goto-char (- (point-max) pos)))
+    (setq pos (+ pos (vlfi-adjust-chunk)))
+    (goto-char (or (byte-to-position (- (position-bytes (point-max))
+                                        pos))
+                   (point-max))))
   (set-visited-file-modtime)
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
@@ -308,12 +311,12 @@ When given MINIMAL flag, skip non important operations."
             vlfi-end-pos (min vlfi-end-pos vlfi-file-size)
             vlfi-start-pos (max 0 (- vlfi-end-pos vlfi-batch-size))))
   (let ((inhibit-read-only t)
-        (pos (point)))
+        (pos (position-bytes (point))))
     (erase-buffer)
     (insert-file-contents buffer-file-name nil
                           vlfi-start-pos vlfi-end-pos)
-    (vlfi-adjust-chunk)
-    (goto-char pos))
+    (goto-char (or (byte-to-position (+ pos (vlfi-adjust-chunk)))
+                   (point-max))))
   (set-buffer-modified-p nil)
   (unless minimal
     (set-visited-file-modtime)
@@ -327,41 +330,43 @@ When given MINIMAL flag, skip non important operations."
   (setq vlfi-start-pos (max 0 start)
         vlfi-end-pos (min end vlfi-file-size))
   (let ((inhibit-read-only t)
-        (pos (point)))
+        (pos (position-bytes (point))))
     (erase-buffer)
     (insert-file-contents buffer-file-name nil
                           vlfi-start-pos vlfi-end-pos)
-    (vlfi-adjust-chunk)
-    (goto-char pos))
+    (goto-char (or (byte-to-position (+ pos (vlfi-adjust-chunk)))
+                   (point-max))))
   (set-buffer-modified-p nil)
   (unless minimal
     (set-visited-file-modtime)
     (vlfi-update-buffer-name)))
 
 (defun vlfi-adjust-chunk ()
-  "Adjust chunk beginning until content can be properly decoded."
-  (or (zerop vlfi-start-pos)
-      (let ((pos (point)))
-        (while (/= (- vlfi-end-pos vlfi-start-pos)
-                   (length (encode-coding-region
-                            (point-min) (point-max)
-                            buffer-file-coding-system t)))
-
-          (setq pos (1- pos)
-                vlfi-start-pos (1- vlfi-start-pos))
-          (let ((inhibit-read-only t))
-            (erase-buffer)
-            (insert-file-contents buffer-file-name nil
-                                  vlfi-start-pos vlfi-end-pos)))
-        (set-buffer-modified-p nil)
-        (goto-char pos))))
+  "Adjust chunk beginning until content can be properly decoded.
+Return number of bytes moved back for this to happen."
+  (let ((shift 0))
+    (while (and (not (zerop vlfi-start-pos))
+                (/= (- vlfi-end-pos vlfi-start-pos)
+                    (length (encode-coding-region
+                             (point-min) (point-max)
+                             buffer-file-coding-system t))))
+      (setq shift (1+ shift)
+            vlfi-start-pos (1- vlfi-start-pos))
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert-file-contents buffer-file-name nil
+                              vlfi-start-pos vlfi-end-pos)))
+    (set-buffer-modified-p nil)
+    shift))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; search
 
 (defun vlfi-re-search (regexp count backward)
   "Search for REGEXP COUNT number of times forward or BACKWARD."
-  (let* ((match-start-pos (+ vlfi-start-pos (point)))
+  (let* ((match-chunk-start vlfi-start-pos)
+         (match-chunk-end vlfi-end-pos)
+         (match-start-pos (+ vlfi-start-pos (position-bytes (point))))
          (match-end-pos match-start-pos)
          (to-find count)
          (search-reporter (make-progress-reporter
@@ -377,10 +382,14 @@ When given MINIMAL flag, skip non important operations."
               (while (not (zerop to-find))
                 (cond ((re-search-backward regexp nil t)
                        (setq to-find (1- to-find)
+                             match-chunk-start vlfi-start-pos
+                             match-chunk-end vlfi-end-pos
                              match-start-pos (+ vlfi-start-pos
-                                                (match-beginning 0))
+                                                (position-bytes
+                                                 (match-beginning 0)))
                              match-end-pos (+ vlfi-start-pos
-                                              (match-end 0))))
+                                              (position-bytes
+                                               (match-end 0)))))
                       ((zerop vlfi-start-pos)
                        (throw 'end-of-file nil))
                       (t (let ((batch-move (- vlfi-start-pos
@@ -392,18 +401,24 @@ When given MINIMAL flag, skip non important operations."
                               batch-move) t))
                          (goto-char (if (< match-start-pos
                                            vlfi-end-pos)
-                                        (- match-start-pos
-                                           vlfi-start-pos)
+                                        (or (byte-to-position
+                                             (- match-start-pos
+                                                vlfi-start-pos))
+                                            (point-max))
                                       (point-max)))
                          (progress-reporter-update search-reporter
                                                    vlfi-start-pos))))
             (while (not (zerop to-find))
               (cond ((re-search-forward regexp nil t)
                      (setq to-find (1- to-find)
+                           match-chunk-start vlfi-start-pos
+                           match-chunk-end vlfi-end-pos
                            match-start-pos (+ vlfi-start-pos
-                                              (match-beginning 0))
+                                              (position-bytes
+                                               (match-beginning 0)))
                            match-end-pos (+ vlfi-start-pos
-                                            (match-end 0))))
+                                            (position-bytes
+                                             (match-end 0)))))
                     ((= vlfi-end-pos vlfi-file-size)
                      (throw 'end-of-file nil))
                     (t (let ((batch-move (- vlfi-end-pos batch-step)))
@@ -412,39 +427,56 @@ When given MINIMAL flag, skip non important operations."
                               match-end-pos
                             batch-move) t))
                        (goto-char (if (< vlfi-start-pos match-end-pos)
-                                      (- match-end-pos vlfi-start-pos)
+                                      (or (byte-to-position
+                                           (- match-end-pos
+                                              vlfi-start-pos))
+                                          (point-max))
                                     (point-min)))
                        (progress-reporter-update search-reporter
                                                  vlfi-end-pos)))))
           (progress-reporter-done search-reporter))
       (if backward
-          (vlfi-goto-match match-end-pos match-start-pos
+          (vlfi-goto-match match-chunk-start match-chunk-end
+                           match-end-pos match-start-pos
                            count to-find)
-        (vlfi-goto-match match-start-pos match-end-pos
+        (vlfi-goto-match match-chunk-start match-chunk-end
+                         match-start-pos match-end-pos
                          count to-find)))))
 
-(defun vlfi-goto-match (match-pos-start match-pos-end count to-find)
-  "Move to chunk surrounding MATCH-POS-START and MATCH-POS-END.
+(defun vlfi-goto-match (match-chunk-start match-chunk-end
+                                          match-pos-start
+                                          match-pos-end
+                                          count to-find)
+  "Move to MATCH-CHUNK-START MATCH-CHUNK-END surrounding \
+MATCH-POS-START and MATCH-POS-END.
 According to COUNT and left TO-FIND, show if search has been
 successful.  Return nil if nothing found."
-  (let ((success (zerop to-find)))
-    (if success
-        (vlfi-update-buffer-name)
-      (vlfi-move-to-batch (- match-pos-start (/ vlfi-batch-size 2))))
-    (let* ((match-end (- match-pos-end vlfi-start-pos))
-           (overlay (make-overlay (- match-pos-start vlfi-start-pos)
-                                  match-end)))
-      (overlay-put overlay 'face 'region)
-      (or success (goto-char match-end))
-      (prog1 (cond (success t)
-                   ((< to-find count)
-                    (message "Moved to the %d match which is last"
-                             (- count to-find))
-                    t)
-                   (t (message "Not found")
-                      nil))
+  (if (= count to-find)
+      (progn (vlfi-move-to-chunk match-chunk-start match-chunk-end)
+             (goto-char (or (byte-to-position (- match-pos-start
+                                                 vlfi-start-pos))
+                            (point-max)))
+             (message "Not found")
+             nil)
+    (let ((success (zerop to-find)))
+      (if success
+          (vlfi-update-buffer-name)
+        (vlfi-move-to-chunk match-chunk-start match-chunk-end))
+      (let* ((match-end (or (byte-to-position (- match-pos-end
+                                                 vlfi-start-pos))
+                            (point-max)))
+             (overlay (make-overlay (byte-to-position
+                                     (- match-pos-start
+                                        vlfi-start-pos))
+                                    match-end)))
+        (overlay-put overlay 'face 'region)
+        (unless success
+          (goto-char match-end)
+          (message "Moved to the %d match which is last"
+                   (- count to-find)))
         (sit-for 0.1)
-        (delete-overlay overlay)))))
+        (delete-overlay overlay)
+        t))))
 
 (defun vlfi-re-search-forward (regexp count)
   "Search forward for REGEXP prefix COUNT number of times.
@@ -515,8 +547,7 @@ or \\[vlfi-discard-edit] to discard changes.")))
   "Write current chunk to file.  Always return true to disable save.
 If changing size of chunk shift remaining file content."
   (interactive)
-  (when (and (derived-mode-p 'vlfi-mode)
-             (buffer-modified-p)
+  (when (and (buffer-modified-p)
              (or (verify-visited-file-modtime)
                  (y-or-n-p "File has changed since visited or saved.  \
 Save anyway? ")))
