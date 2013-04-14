@@ -67,7 +67,6 @@
     (define-key map "e" 'vlfi-edit-mode)
     (define-key map "j" 'vlfi-jump-to-chunk)
     (define-key map "l" 'vlfi-goto-line)
-    (define-key map "a" 'vlfi-adjust-chunk)
     map)
   "Keymap for `vlfi-mode'.")
 
@@ -264,6 +263,7 @@ When prefix argument is negative
                             end)
       (goto-char pos))
     (setq vlfi-end-pos end))
+  (vlfi-adjust-chunk)
   (set-visited-file-modtime)
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
@@ -290,8 +290,9 @@ When prefix argument is negative
                           (if do-prepend
                               vlfi-start-pos
                             vlfi-end-pos))
-    (goto-char (- (point-max) pos))
-    (setq vlfi-start-pos start))
+    (setq vlfi-start-pos start)
+    (vlfi-adjust-chunk)
+    (goto-char (- (point-max) pos)))
   (set-visited-file-modtime)
   (set-buffer-modified-p nil)
   (vlfi-update-buffer-name))
@@ -311,6 +312,7 @@ When given MINIMAL flag, skip non important operations."
     (erase-buffer)
     (insert-file-contents buffer-file-name nil
                           vlfi-start-pos vlfi-end-pos)
+    (vlfi-adjust-chunk)
     (goto-char pos))
   (set-buffer-modified-p nil)
   (unless minimal
@@ -329,11 +331,30 @@ When given MINIMAL flag, skip non important operations."
     (erase-buffer)
     (insert-file-contents buffer-file-name nil
                           vlfi-start-pos vlfi-end-pos)
+    (vlfi-adjust-chunk)
     (goto-char pos))
   (set-buffer-modified-p nil)
   (unless minimal
     (set-visited-file-modtime)
     (vlfi-update-buffer-name)))
+
+(defun vlfi-adjust-chunk ()
+  "Adjust chunk beginning until content can be properly decoded."
+  (or (zerop vlfi-start-pos)
+      (let ((pos (point)))
+        (while (/= (- vlfi-end-pos vlfi-start-pos)
+                   (length (encode-coding-region
+                            (point-min) (point-max)
+                            buffer-file-coding-system t)))
+
+          (setq pos (1- pos)
+                vlfi-start-pos (1- vlfi-start-pos))
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (insert-file-contents buffer-file-name nil
+                                  vlfi-start-pos vlfi-end-pos)))
+        (set-buffer-modified-p nil)
+        (goto-char pos))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; search
@@ -460,25 +481,6 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
       (unless success
         (vlfi-move-to-chunk start-pos end-pos)
         (goto-char pos)))))
-
-(defun vlfi-adjust-chunk ()
-  "Adjust chunk beginning until content can be properly decoded."
-  (interactive)
-  (or (zerop vlfi-start-pos)
-      (let ((pos (point)))
-        (while (/= (- vlfi-end-pos vlfi-start-pos)
-                   (length (encode-coding-region
-                            (point-min) (point-max)
-                            buffer-file-coding-system t)))
-
-          (setq pos (1- pos)
-                vlfi-start-pos (1- vlfi-start-pos))
-          (let ((inhibit-read-only t))
-            (erase-buffer)
-            (insert-file-contents buffer-file-name nil
-                                  vlfi-start-pos vlfi-end-pos)))
-        (set-buffer-modified-p nil)
-        (goto-char pos))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; editing
