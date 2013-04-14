@@ -67,6 +67,7 @@
     (define-key map "e" 'vlfi-edit-mode)
     (define-key map "j" 'vlfi-jump-to-chunk)
     (define-key map "l" 'vlfi-goto-line)
+    (define-key map "a" 'vlfi-adjust-chunk)
     map)
   "Keymap for `vlfi-mode'.")
 
@@ -459,6 +460,19 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
       (unless success
         (vlfi-move-to-chunk start-pos end-pos)
         (goto-char pos)))))
+
+(defun vlfi-adjust-chunk (bytes)
+  "Adjust chunk beginning by BYTES."
+  (interactive "p")
+  (or (zerop vlfi-start-pos)
+      (let ((pos (+ (point) bytes)))
+        (setq vlfi-start-pos (- vlfi-start-pos bytes))
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert-file-contents buffer-file-name nil
+                                vlfi-start-pos vlfi-end-pos))
+        (set-buffer-modified-p nil)
+        (goto-char pos))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; editing
