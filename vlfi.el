@@ -87,16 +87,16 @@
   (put 'vlfi-file-size 'permanent-local t))
 
 ;;;###autoload
-(defun vlfi (file &optional from-end)
-  "View Large FILE.  With FROM-END prefix, view from the back.
+(defun vlfi (file)
+  "View Large FILE.
 Batches of the file data from FILE will be displayed in a read-only
 buffer.  You can customize number of bytes displayed by customizing
 `vlfi-batch-size'."
-  (interactive "fFile to open: \nP")
+  (interactive "fFile to open: ")
   (with-current-buffer (generate-new-buffer "*vlfi*")
     (setq buffer-file-name file
           vlfi-file-size (vlfi-get-file-size file))
-    (vlfi-insert-file from-end)
+    (vlfi-insert-file)
     (vlfi-mode)
     (switch-to-buffer (current-buffer))))
 
@@ -104,11 +104,10 @@ buffer.  You can customize number of bytes displayed by customizing
 ;;; integration with other packages
 
 ;;;###autoload
-(defun dired-vlfi (from-end)
-  "In Dired, visit the file on this line in VLFI mode.
-With FROM-END prefix, view from the back."
-  (interactive "P")
-  (vlfi (dired-get-file-for-visit) from-end))
+(defun dired-vlfi ()
+  "In Dired, visit the file on this line in VLFI mode."
+  (interactive)
+  (vlfi (dired-get-file-for-visit)))
 
 ;;;###autoload
 (eval-after-load "dired"
@@ -137,7 +136,7 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                            '(?o ?O ?v ?V ?a ?A))))
          (cond ((memq char '(?o ?O)))
                ((memq char '(?v ?V))
-                (vlfi filename nil)
+                (vlfi filename)
                 (error ""))
                ((memq char '(?a ?A))
                 (error "Aborted"))))))
