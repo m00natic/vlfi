@@ -514,33 +514,25 @@ Save anyway? ")))
     (vlfi-mode)
     t))
 
-(defun vlfi-prepare-write-buffer ()
-  "Optimize buffer for a lot of insert/erasure."
-  (setq delay-mode-hooks t)
-  (fundamental-mode)
-  (buffer-disable-undo))
-
 (defun vlfi-file-shift-back (size-change)
   "Shift file contents SIZE-CHANGE bytes back."
-  (let ((coding-system buffer-file-coding-system))
-    (write-region nil nil buffer-file-name vlfi-start-pos t)
-    (setq buffer-file-coding-system nil)
-    (vlfi-prepare-write-buffer)
-    (let ((read-start-pos vlfi-end-pos)
-          (reporter (make-progress-reporter "Adjusting file content"
-                                            vlfi-end-pos
-                                            vlfi-file-size)))
-      (while (vlfi-shift-batch read-start-pos (- read-start-pos
-                                                 size-change))
-        (setq read-start-pos (+ read-start-pos vlfi-batch-size))
-        (progress-reporter-update reporter read-start-pos))
-      ;; pad end with space
-      (erase-buffer)
-      (insert-char 32 size-change)
-      (write-region nil nil buffer-file-name (- vlfi-file-size
-                                                size-change) t)
-      (progress-reporter-done reporter))
-    (setq buffer-file-coding-system coding-system)))
+  (write-region nil nil buffer-file-name vlfi-start-pos t)
+  (buffer-disable-undo)
+  (let ((read-start-pos vlfi-end-pos)
+        (coding-system-for-write 'no-conversion)
+        (reporter (make-progress-reporter "Adjusting file content"
+                                          vlfi-end-pos
+                                          vlfi-file-size)))
+    (while (vlfi-shift-batch read-start-pos (- read-start-pos
+                                               size-change))
+      (setq read-start-pos (+ read-start-pos vlfi-batch-size))
+      (progress-reporter-update reporter read-start-pos))
+    ;; pad end with space
+    (erase-buffer)
+    (insert-char 32 size-change)
+    (write-region nil nil buffer-file-name (- vlfi-file-size
+                                              size-change) t)
+    (progress-reporter-done reporter)))
 
 (defun vlfi-shift-batch (read-pos write-pos)
   "Read `vlfi-batch-size' bytes from READ-POS and write them \
@@ -560,13 +552,13 @@ Done by saving content up front and then writing previous batch."
   (let ((vlfi-buffer (current-buffer))
         (temp-buffer (generate-new-buffer (concat " "
                                                   (buffer-name))))
-        (coding-system buffer-file-coding-system))
+        (coding-system-for-write 'no-conversion))
     (let ((file buffer-file-name))
       (set-buffer temp-buffer)
       (setq buffer-file-name file)
-      (vlfi-prepare-write-buffer))
+      (buffer-disable-undo))
     (set-buffer vlfi-buffer)
-    (vlfi-prepare-write-buffer)
+    (buffer-disable-undo)
     (let ((read-buffer temp-buffer)
           (write-buffer vlfi-buffer)
           (size (+ vlfi-batch-size size-change))
@@ -586,8 +578,7 @@ Done by saving content up front and then writing previous batch."
         (progress-reporter-update reporter write-pos))
       (progress-reporter-done reporter))
     (kill-buffer temp-buffer)
-    (set-buffer vlfi-buffer)
-    (setq buffer-file-coding-system coding-system)))
+    (set-buffer vlfi-buffer)))
 
 (defun vlfi-shift-batches (size read-buffer read-pos
                                 write-buffer write-pos)
@@ -600,7 +591,6 @@ Return nil if EOF is reached, t otherwise."
       ;; read
       (set-buffer read-buffer)
       (erase-buffer)
-      (setq buffer-file-coding-system nil)
       (insert-file-contents-literally buffer-file-name nil read-pos
                                       (min file-size (+ read-pos
                                                         size))))
