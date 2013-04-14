@@ -242,14 +242,11 @@ When prefix argument is supplied and positive
 When prefix argument is negative
  append next APPEND number of batches to the existing buffer."
   (interactive "p")
-  (let ((end (+ vlfi-end-pos (* vlfi-batch-size
-                                (abs append)))))
-    (when (< vlfi-file-size end)        ; re-check file size
-      (setq vlfi-file-size (vlfi-get-file-size buffer-file-name))
-      (cond ((= vlfi-end-pos vlfi-file-size)
-             (error "Already at EOF"))
-            ((< vlfi-file-size end)
-             (setq end vlfi-file-size))))
+  (or (verify-visited-file-modtime)
+      (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
+  (let ((end (min (+ vlfi-end-pos (* vlfi-batch-size
+                                     (abs append)))
+                  vlfi-file-size)))
     (let ((inhibit-read-only t)
           (do-append (< append 0))
           (pos (position-bytes (point))))
@@ -277,6 +274,8 @@ When prefix argument is negative
   (interactive "p")
   (if (zerop vlfi-start-pos)
       (error "Already at BOF"))
+  (or (verify-visited-file-modtime)
+      (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
   (let ((inhibit-read-only t)
         (start (max 0 (- vlfi-start-pos (* vlfi-batch-size
                                            (abs prepend)))))
@@ -285,7 +284,8 @@ When prefix argument is negative
                 (position-bytes (point)))))
     (if do-prepend
         (goto-char (point-min))
-      (setq vlfi-end-pos (+ start vlfi-batch-size))
+      (setq vlfi-end-pos (min (+ start vlfi-batch-size)
+                              vlfi-file-size))
       (erase-buffer))
     (insert-file-contents buffer-file-name nil start
                           (if do-prepend
@@ -304,12 +304,13 @@ When prefix argument is negative
   "Move to batch determined by START.
 Adjust according to file start/end and show `vlfi-batch-size' bytes.
 When given MINIMAL flag, skip non important operations."
+  (or (verify-visited-file-modtime)
+      (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
   (setq vlfi-start-pos (max 0 start)
-        vlfi-end-pos (+ vlfi-start-pos vlfi-batch-size))
-  (if (< vlfi-file-size vlfi-end-pos)   ; re-check file size
-      (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)
-            vlfi-end-pos (min vlfi-end-pos vlfi-file-size)
-            vlfi-start-pos (max 0 (- vlfi-end-pos vlfi-batch-size))))
+        vlfi-end-pos (min (+ vlfi-start-pos vlfi-batch-size)
+                          vlfi-file-size))
+  (if (= vlfi-file-size vlfi-end-pos)   ; re-check file size
+      (setq vlfi-start-pos (max 0 (- vlfi-end-pos vlfi-batch-size))))
   (let ((inhibit-read-only t)
         (pos (position-bytes (point))))
     (erase-buffer)
@@ -318,14 +319,13 @@ When given MINIMAL flag, skip non important operations."
     (goto-char (or (byte-to-position (+ pos (vlfi-adjust-chunk)))
                    (point-max))))
   (set-buffer-modified-p nil)
-  (unless minimal
-    (set-visited-file-modtime)
-    (vlfi-update-buffer-name)))
+  (set-visited-file-modtime)
+  (or minimal(vlfi-update-buffer-name)))
 
 (defun vlfi-move-to-chunk (start end &optional minimal)
   "Move to chunk determined by START END.
 When given MINIMAL flag, skip non important operations."
-  (if (< vlfi-file-size end)            ; re-check file size
+  (or (verify-visited-file-modtime)
       (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
   (setq vlfi-start-pos (max 0 start)
         vlfi-end-pos (min end vlfi-file-size))
@@ -337,9 +337,8 @@ When given MINIMAL flag, skip non important operations."
     (goto-char (or (byte-to-position (+ pos (vlfi-adjust-chunk)))
                    (point-max))))
   (set-buffer-modified-p nil)
-  (unless minimal
-    (set-visited-file-modtime)
-    (vlfi-update-buffer-name)))
+  (set-visited-file-modtime)
+  (or minimal (vlfi-update-buffer-name)))
 
 (defun vlfi-adjust-chunk ()
   "Adjust chunk beginning until content can be properly decoded.
@@ -590,7 +589,8 @@ Save anyway? ")))
   "Read `vlfi-batch-size' bytes from READ-POS and write them \
 back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
   (erase-buffer)
-  (setq vlfi-file-size (vlfi-get-file-size buffer-file-name))
+  (or (verify-visited-file-modtime)
+      (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
   (let ((read-end (+ read-pos vlfi-batch-size)))
     (insert-file-contents-literally buffer-file-name nil
                                     read-pos
