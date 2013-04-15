@@ -345,6 +345,7 @@ When given MINIMAL flag, skip non important operations."
 Return number of bytes moved back for this to happen."
   (let ((shift 0))
     (while (and (not (zerop vlfi-start-pos))
+                (< shift 3)
                 (/= (- vlfi-end-pos vlfi-start-pos)
                     (length (encode-coding-region
                              (point-min) (point-max)
@@ -595,7 +596,7 @@ back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
     (insert-file-contents-literally buffer-file-name nil
                                     read-pos
                                     (min vlfi-file-size read-end))
-    (write-region nil nil buffer-file-name write-pos t)
+    (write-region nil nil buffer-file-name write-pos 0)
     (< read-end vlfi-file-size)))
 
 (defun vlfi-file-shift-forward (size-change)
@@ -648,7 +649,7 @@ Return nil if EOF is reached, t otherwise."
                                                         size))))
     ;; write
     (set-buffer write-buffer)
-    (write-region nil nil buffer-file-name write-pos t)
+    (write-region nil nil buffer-file-name write-pos 0)
     read-more))
 
 (provide 'vlfi)
