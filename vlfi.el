@@ -606,56 +606,46 @@ back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
 (defun vlfi-file-shift-forward (size-change)
   "Shift file contents SIZE-CHANGE bytes forward.
 Done by saving content up front and then writing previous batch."
-  (let ((vlfi-buffer (current-buffer))
-        (temp-buffer (generate-new-buffer (concat " "
-                                                  (buffer-name))))
-        (coding-system-for-write 'no-conversion))
-    (let ((file buffer-file-name))
-      (set-buffer temp-buffer)
-      (setq buffer-file-name file)
-      (buffer-disable-undo))
-    (set-buffer vlfi-buffer)
-    (buffer-disable-undo)
-    (let ((read-buffer temp-buffer)
-          (write-buffer vlfi-buffer)
-          (size (+ vlfi-batch-size size-change))
-          (read-pos vlfi-end-pos)
-          (write-pos vlfi-start-pos)
-          swap-buffer
-          (reporter (make-progress-reporter
-                     "Adjusting file content..."
-                     vlfi-start-pos vlfi-file-size)))
-      (while (vlfi-shift-batches size read-buffer read-pos
-                                 write-buffer write-pos)
-        (setq swap-buffer read-buffer
-              read-buffer write-buffer
-              write-buffer swap-buffer
-              write-pos (+ read-pos size-change)
-              read-pos (+ read-pos size))
-        (progress-reporter-update reporter write-pos))
-      (progress-reporter-done reporter))
-    (set-buffer temp-buffer)
-    (set-buffer-modified-p nil)
-    (kill-buffer temp-buffer)
-    (set-buffer vlfi-buffer)))
+  (buffer-disable-undo)
+  (let ((size (+ vlfi-batch-size size-change))
+        (read-pos vlfi-end-pos)
+        (write-pos vlfi-start-pos)
+        (reporter (make-progress-reporter "Adjusting file content..."
+                                          vlfi-start-pos
+                                          vlfi-file-size)))
+    (when (vlfi-shift-batches size read-pos write-pos t)
+      (setq write-pos (+ read-pos size-change)
+            read-pos (+ read-pos size))
+      (progress-reporter-update reporter write-pos)
+      (let ((coding-system-for-write 'no-conversion))
+        (while (vlfi-shift-batches size read-pos write-pos nil)
+          (setq write-pos (+ read-pos size-change)
+                read-pos (+ read-pos size))
+          (progress-reporter-update reporter write-pos))))
+    (progress-reporter-done reporter)))
 
-(defun vlfi-shift-batches (size read-buffer read-pos
-                                write-buffer write-pos)
-  "Read SIZE bytes in READ-BUFFER starting from READ-POS.
-Then write contents of WRITE-BUFFER to buffer file at WRITE-POS.
+(defun vlfi-shift-batches (size read-pos write-pos hide-read)
+  "Append SIZE bytes of file starting at READ-POS.
+Then write initial buffer content to file at WRITE-POS.
+If HIDE-READ is non nil, temporarily hide literal read content.
 Return nil if EOF is reached, t otherwise."
-  (let* ((file-size (vlfi-get-file-size buffer-file-name))
-         (read-more (< read-pos file-size)))
+  (or (verify-visited-file-modtime (current-buffer))
+      (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
+  (let ((read-more (< read-pos vlfi-file-size))
+        (start-write-pos (point-min))
+        (end-write-pos (point-max)))
     (when read-more
-      ;; read
-      (set-buffer read-buffer)
-      (erase-buffer)
+      (goto-char end-write-pos)
       (insert-file-contents-literally buffer-file-name nil read-pos
-                                      (min file-size (+ read-pos
-                                                        size))))
+                                      (min vlfi-file-size (+ read-pos
+                                                             size))))
     ;; write
-    (set-buffer write-buffer)
-    (write-region nil nil buffer-file-name write-pos 0)
+    (if hide-read ; hide literal region if user has to choose encoding
+        (narrow-to-region start-write-pos end-write-pos))
+    (write-region start-write-pos end-write-pos
+                  buffer-file-name write-pos 0)
+    (delete-region start-write-pos end-write-pos)
+    (if hide-read (widen))
     read-more))
 
 (provide 'vlfi)
