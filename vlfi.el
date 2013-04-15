@@ -62,6 +62,7 @@
         (vlfi-change-batch-size t)))
     (define-key map "s" 'vlfi-re-search-forward)
     (define-key map "r" 'vlfi-re-search-backward)
+    (define-key map "o" 'vlfi-occur)
     (define-key map "[" 'vlfi-beginning-of-file)
     (define-key map "]" 'vlfi-end-of-file)
     (define-key map "e" 'vlfi-edit-mode)
@@ -374,12 +375,12 @@ Return number of bytes moved back for this to happen."
          (match-start-pos (+ vlfi-start-pos (position-bytes (point))))
          (match-end-pos match-start-pos)
          (to-find count)
-         (search-reporter (make-progress-reporter
-                           (concat "Searching for " regexp "...")
-                           (if backward
-                               (- vlfi-file-size vlfi-end-pos)
-                             vlfi-start-pos)
-                           vlfi-file-size))
+         (reporter (make-progress-reporter
+                    (concat "Searching for " regexp "...")
+                    (if backward
+                        (- vlfi-file-size vlfi-end-pos)
+                      vlfi-start-pos)
+                    vlfi-file-size))
          (batch-step (/ vlfi-batch-size 8))) ; amount of chunk overlap
     (unwind-protect
         (catch 'end-of-file
@@ -412,8 +413,8 @@ Return number of bytes moved back for this to happen."
                                             (point-max))
                                       (point-max)))
                          (progress-reporter-update
-                          search-reporter (- vlfi-file-size
-                                             vlfi-start-pos)))))
+                          reporter (- vlfi-file-size
+                                      vlfi-start-pos)))))
             (while (not (zerop to-find))
               (cond ((re-search-forward regexp nil t)
                      (setq to-find (1- to-find)
@@ -438,9 +439,9 @@ Return number of bytes moved back for this to happen."
                                               vlfi-start-pos))
                                           (point-max))
                                     (point-min)))
-                       (progress-reporter-update search-reporter
+                       (progress-reporter-update reporter
                                                  vlfi-end-pos)))))
-          (progress-reporter-done search-reporter))
+          (progress-reporter-done reporter))
       (if backward
           (vlfi-goto-match match-chunk-start match-chunk-end
                            match-end-pos match-start-pos
@@ -517,6 +518,96 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
       (unless success
         (vlfi-move-to-chunk start-pos end-pos)
         (goto-char pos)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; occur
+
+(defun vlfi-occur (regexp)
+  "Make occur style index for REGEXP."
+  (interactive (list (read-regexp "List lines matching regexp"
+                                  (if regexp-history
+                                      (car regexp-history)))))
+  (let ((start-pos vlfi-start-pos)
+        (end-pos vlfi-end-pos)
+        (pos (point)))
+    (unwind-protect
+        (progn (vlfi-beginning-of-file)
+               (goto-char (point-min))
+               (vlfi-build-occur regexp))
+      (vlfi-move-to-chunk start-pos end-pos)
+      (goto-char pos))))
+
+(defun vlfi-build-occur (regexp)
+  "Build occur style index for REGEXP."
+  (let ((line 1)
+        (last-line-result 0)
+        (last-line-pos (point-min))
+        (file buffer-file-name)
+        (match-end-pos (+ vlfi-start-pos (position-bytes (point))))
+        (occur-buffer (generate-new-buffer
+                       (concat "*VLFI-occur " (file-name-nondirectory
+                                               buffer-file-name)
+                               "*")))
+        (line-regexp (concat "\\(?5:[\n\C-m]\\)\\|\\(?10:"
+                             regexp "\\)"))
+        (batch-step (/ vlfi-batch-size 8))
+        (reporter (make-progress-reporter
+                   (concat "Building index for " regexp "...")
+                   vlfi-start-pos vlfi-file-size)))
+    (unwind-protect
+        (progn
+          (while (/= vlfi-end-pos vlfi-file-size)
+            (if (re-search-forward line-regexp nil t)
+                (progn
+                  (setq match-end-pos (+ vlfi-start-pos
+                                         (position-bytes
+                                          (match-end 0))))
+                  (if (match-string 5)
+                      (setq line (1+ line)
+                            last-line-pos (point))
+                    (let ((line-text (buffer-substring
+                                      (line-beginning-position)
+                                      (line-end-position))))
+                      (with-current-buffer occur-buffer
+                        (or (= line last-line-result)
+                            (insert (propertize
+                                     (format "%6d:%s\n" line
+                                             line-text)
+                                     'file file
+                                     'chunk-start vlfi-start-pos
+                                     'chunk-end vlfi-end-pos
+                                     'match-pos
+                                     (match-beginning 10))))
+                        (forward-line -1)
+                        (let ((line-start (+ (line-beginning-position)
+                                             7)))
+                          (add-text-properties
+                           (+ line-start (match-beginning 10)
+                              (- last-line-pos))
+                           (+ line-start (match-end 10)
+                              (- last-line-pos))
+                           (list 'face 'region)))
+                        (forward-line)
+                        (setq last-line-result line)))))
+              (let ((batch-move (- vlfi-end-pos batch-step)))
+                (vlfi-move-to-batch (if (< batch-move match-end-pos)
+                                        match-end-pos
+                                      batch-move) t))
+              (goto-char (if (< vlfi-start-pos match-end-pos)
+                             (or (byte-to-position (- match-end-pos
+                                                      vlfi-start-pos))
+                                 (point-min))
+                           (point-min)))
+              (progress-reporter-update reporter vlfi-end-pos)))
+          (progress-reporter-done reporter))
+      (with-current-buffer occur-buffer
+        (goto-char (point-min))
+        (let ((match-count (count-lines (point-min) (point-max))))
+          (insert (propertize
+                   (format "%d matches for \"%s\" in file \
+\(from %d lines\): %s\n" match-count regexp line file)
+                   'face 'underline))))
+      (display-buffer occur-buffer))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; editing
