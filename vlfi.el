@@ -242,7 +242,7 @@ When prefix argument is supplied and positive
 When prefix argument is negative
  append next APPEND number of batches to the existing buffer."
   (interactive "p")
-  (or (verify-visited-file-modtime)
+  (or (verify-visited-file-modtime (current-buffer))
       (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
   (let ((end (min (+ vlfi-end-pos (* vlfi-batch-size
                                      (abs append)))
@@ -274,7 +274,7 @@ When prefix argument is negative
   (interactive "p")
   (if (zerop vlfi-start-pos)
       (error "Already at BOF"))
-  (or (verify-visited-file-modtime)
+  (or (verify-visited-file-modtime (current-buffer))
       (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
   (let ((inhibit-read-only t)
         (start (max 0 (- vlfi-start-pos (* vlfi-batch-size
@@ -304,7 +304,7 @@ When prefix argument is negative
   "Move to batch determined by START.
 Adjust according to file start/end and show `vlfi-batch-size' bytes.
 When given MINIMAL flag, skip non important operations."
-  (or (verify-visited-file-modtime)
+  (or (verify-visited-file-modtime (current-buffer))
       (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
   (setq vlfi-start-pos (max 0 start)
         vlfi-end-pos (min (+ vlfi-start-pos vlfi-batch-size)
@@ -325,7 +325,7 @@ When given MINIMAL flag, skip non important operations."
 (defun vlfi-move-to-chunk (start end &optional minimal)
   "Move to chunk determined by START END.
 When given MINIMAL flag, skip non important operations."
-  (or (verify-visited-file-modtime)
+  (or (verify-visited-file-modtime (current-buffer))
       (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
   (setq vlfi-start-pos (max 0 start)
         vlfi-end-pos (min end vlfi-file-size))
@@ -370,7 +370,7 @@ Return number of bytes moved back for this to happen."
          (match-end-pos match-start-pos)
          (to-find count)
          (search-reporter (make-progress-reporter
-                           (concat "Searching for " regexp)
+                           (concat "Searching for " regexp "...")
                            (if backward
                                (- vlfi-file-size vlfi-end-pos)
                              vlfi-start-pos)
@@ -406,8 +406,9 @@ Return number of bytes moved back for this to happen."
                                                 vlfi-start-pos))
                                             (point-max))
                                       (point-max)))
-                         (progress-reporter-update search-reporter
-                                                   vlfi-start-pos))))
+                         (progress-reporter-update
+                          search-reporter (- vlfi-file-size
+                                             vlfi-start-pos)))))
             (while (not (zerop to-find))
               (cond ((re-search-forward regexp nil t)
                      (setq to-find (1- to-find)
@@ -483,8 +484,7 @@ successful.  Return nil if nothing found."
 Search is performed chunk by chunk in `vlfi-batch-size' memory."
   (interactive (list (read-regexp "Search whole file"
                                   (if regexp-history
-                                      (car regexp-history))
-                                  'regexp-history)
+                                      (car regexp-history)))
                      (or current-prefix-arg 1)))
   (vlfi-re-search regexp count nil))
 
@@ -493,8 +493,7 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
 Search is performed chunk by chunk in `vlfi-batch-size' memory."
   (interactive (list (read-regexp "Search whole file backward"
                                   (if regexp-history
-                                      (car regexp-history))
-                                  'regexp-history)
+                                      (car regexp-history)))
                      (or current-prefix-arg 1)))
   (vlfi-re-search regexp count t))
 
@@ -548,7 +547,7 @@ or \\[vlfi-discard-edit] to discard changes.")))
 If changing size of chunk shift remaining file content."
   (interactive)
   (when (and (buffer-modified-p)
-             (or (verify-visited-file-modtime)
+             (or (verify-visited-file-modtime (current-buffer))
                  (y-or-n-p "File has changed since visited or saved.  \
 Save anyway? ")))
     (let ((pos (point))
@@ -572,7 +571,7 @@ Save anyway? ")))
   (buffer-disable-undo)
   (let ((read-start-pos vlfi-end-pos)
         (coding-system-for-write 'no-conversion)
-        (reporter (make-progress-reporter "Adjusting file content"
+        (reporter (make-progress-reporter "Adjusting file content..."
                                           vlfi-end-pos
                                           vlfi-file-size)))
     (while (vlfi-shift-batch read-start-pos (- read-start-pos
@@ -590,7 +589,7 @@ Save anyway? ")))
   "Read `vlfi-batch-size' bytes from READ-POS and write them \
 back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
   (erase-buffer)
-  (or (verify-visited-file-modtime)
+  (or (verify-visited-file-modtime (current-buffer))
       (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
   (let ((read-end (+ read-pos vlfi-batch-size)))
     (insert-file-contents-literally buffer-file-name nil
@@ -618,9 +617,9 @@ Done by saving content up front and then writing previous batch."
           (read-pos vlfi-end-pos)
           (write-pos vlfi-start-pos)
           swap-buffer
-          (reporter (make-progress-reporter "Adjusting file content"
-                                            vlfi-start-pos
-                                            vlfi-file-size)))
+          (reporter (make-progress-reporter
+                     "Adjusting file content..."
+                     vlfi-start-pos vlfi-file-size)))
       (while (vlfi-shift-batches size read-buffer read-pos
                                  write-buffer write-pos)
         (setq swap-buffer read-buffer
@@ -630,6 +629,8 @@ Done by saving content up front and then writing previous batch."
               read-pos (+ read-pos size))
         (progress-reporter-update reporter write-pos))
       (progress-reporter-done reporter))
+    (set-buffer temp-buffer)
+    (set-buffer-modified-p nil)
     (kill-buffer temp-buffer)
     (set-buffer vlfi-buffer)))
 
