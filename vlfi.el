@@ -476,7 +476,7 @@ successful.  Return nil if nothing found."
                                      (- match-pos-start
                                         vlfi-start-pos))
                                     match-end)))
-        (overlay-put overlay 'face 'region)
+        (overlay-put overlay 'face 'match)
         (unless success
           (goto-char match-end)
           (message "Moved to the %d match which is last"
@@ -522,6 +522,34 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; occur
 
+(defvar vlfi-occur-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "n" 'vlfi-occur-next-match)
+    (define-key map "p" 'vlfi-occur-prev-match)
+    map)
+  "Keymap for command `vlfi-occur-mode'.")
+
+(define-derived-mode vlfi-occur-mode special-mode "VLFI[occur]"
+  "Major mode for showing occur matches of VLFI opened files.")
+
+(defun vlfi-occur-next-match ()
+  "Move cursor to next match."
+  (interactive)
+  (if (eq (get-char-property (point) 'face) 'match)
+      (goto-char (next-single-property-change (point) 'face)))
+  (goto-char (or (text-property-any (point) (point-max) 'face 'match)
+                 (text-property-any (point-min) (point)
+                                    'face 'match))))
+
+(defun vlfi-occur-prev-match ()
+  "Move cursor to previous match."
+  (interactive)
+  (if (eq (get-char-property (point) 'face) 'match)
+      (goto-char (previous-single-property-change (point) 'face)))
+  (while (not (eq (get-char-property (point) 'face) 'match))
+    (goto-char (or (previous-single-property-change (point) 'face)
+                   (point-max)))))
+
 (defun vlfi-occur (regexp)
   "Make occur style index for REGEXP."
   (interactive (list (read-regexp "List lines matching regexp"
@@ -530,12 +558,11 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
   (let ((start-pos vlfi-start-pos)
         (end-pos vlfi-end-pos)
         (pos (point)))
-    (unwind-protect
-        (progn (vlfi-beginning-of-file)
-               (goto-char (point-min))
-               (vlfi-build-occur regexp))
-      (vlfi-move-to-chunk start-pos end-pos)
-      (goto-char pos))))
+    (vlfi-beginning-of-file)
+    (goto-char (point-min))
+    (vlfi-build-occur regexp)
+    (vlfi-move-to-chunk start-pos end-pos)
+    (goto-char pos)))
 
 (defun vlfi-build-occur (regexp)
   "Build occur style index for REGEXP."
@@ -586,7 +613,7 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
                               (- last-line-pos))
                            (+ line-start (match-end 10)
                               (- last-line-pos))
-                           (list 'face 'region)))
+                           (list 'face 'match)))
                         (forward-line)
                         (setq last-line-result line)))))
               (let ((batch-move (- vlfi-end-pos batch-step)))
@@ -606,7 +633,8 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
           (insert (propertize
                    (format "%d matches for \"%s\" in file \
 \(from %d lines\): %s\n" match-count regexp line file)
-                   'face 'underline))))
+                   'face 'underline)))
+        (vlfi-occur-mode))
       (display-buffer occur-buffer))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
