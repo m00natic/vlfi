@@ -560,7 +560,7 @@ The same for mouse EVENT."
     (switch-to-buffer (window-buffer (posn-window (event-end event))))
     (goto-char (posn-point (event-end event))))
   (let* ((pos (point))
-         (pos-relative (- pos (line-beginning-position)))
+         (pos-relative (- pos (line-beginning-position) 1))
          (file (get-char-property pos 'file)))
     (if file
         (let ((chunk-start (get-char-property pos 'chunk-start))
@@ -568,9 +568,7 @@ The same for mouse EVENT."
               (buffer (get-char-property pos 'buffer))
               (match-pos (or (get-char-property pos 'match-pos)
                              (+ (get-char-property pos 'line-pos)
-                                (if (< 8 pos-relative)
-                                    (- pos-relative 8)
-                                  0)))))
+                                pos-relative))))
           (unless (buffer-live-p buffer)
             (let ((occur-buffer (current-buffer)))
               (setq buffer (vlfi file))
@@ -630,26 +628,24 @@ The same for mouse EVENT."
                                        line-pos (line-end-position))))
                       (with-current-buffer occur-buffer
                         (unless (= line last-match-line)
-                          (insert (propertize
-                                   (format "%7d:" line)
-                                   'file file
-                                   'buffer vlfi-buffer
-                                   'chunk-start chunk-start
-                                   'chunk-end chunk-end
-                                   'face 'shadow
-                                   'mouse-face '(highlight)
-                                   'line-pos line-pos))
-                          (insert (propertize
-                                   (format "%s\n" line-text)
-                                   'file file
-                                   'buffer vlfi-buffer
-                                   'chunk-start chunk-start
-                                   'chunk-end chunk-end
-                                   'mouse-face '(highlight)
-                                   'line-pos line-pos)))
-                        (forward-line -1)
+                          (insert "\n:")
+                          (let* ((overlay-pos (1- (point)))
+                                 (overlay (make-overlay
+                                           overlay-pos
+                                           (1+ overlay-pos))))
+                            (overlay-put overlay 'before-string
+                                         (propertize
+                                          (number-to-string line)
+                                          'face 'shadow)))
+                          (insert (propertize line-text
+                                              'file file
+                                              'buffer vlfi-buffer
+                                              'chunk-start chunk-start
+                                              'chunk-end chunk-end
+                                              'mouse-face '(highlight)
+                                              'line-pos line-pos)))
                         (let ((line-start (+ (line-beginning-position)
-                                             8))
+                                             1))
                               (match-pos (match-beginning 10)))
                           (add-text-properties
                            (+ line-start match-pos (- last-line-pos))
