@@ -598,6 +598,7 @@ The same for mouse EVENT."
         (last-match-line 0)
         (last-line-pos (point-min))
         (file buffer-file-name)
+        (total-matches 0)
         (match-end-pos (+ vlfi-start-pos (position-bytes (point))))
         (occur-buffer (generate-new-buffer
                        (concat "*VLFI-occur " (file-name-nondirectory
@@ -643,7 +644,12 @@ The same for mouse EVENT."
                                               'chunk-start chunk-start
                                               'chunk-end chunk-end
                                               'mouse-face '(highlight)
-                                              'line-pos line-pos)))
+                                              'line-pos line-pos
+                                              'help-echo
+                                              (format "Move to line %d"
+                                                      line))))
+                        (setq last-match-line line
+                              total-matches (1+ total-matches))
                         (let ((line-start (+ (line-beginning-position)
                                              1))
                               (match-pos (match-beginning 10)))
@@ -651,9 +657,10 @@ The same for mouse EVENT."
                            (+ line-start match-pos (- last-line-pos))
                            (+ line-start (match-end 10)
                               (- last-line-pos))
-                           (list 'face 'match 'match-pos match-pos)))
-                        (forward-line)
-                        (setq last-match-line line)))))
+                           (list 'face 'match 'match-pos match-pos
+                                 'help-echo
+                                 (format "Move to match %d"
+                                         total-matches))))))))
               (let ((batch-move (- vlfi-end-pos batch-step)))
                 (vlfi-move-to-batch (if (< batch-move match-end-pos)
                                         match-end-pos
@@ -667,15 +674,21 @@ The same for mouse EVENT."
                     last-line-pos (point-min))
               (progress-reporter-update reporter vlfi-end-pos)))
           (progress-reporter-done reporter))
-      (with-current-buffer occur-buffer
-        (goto-char (point-min))
-        (let ((match-count (count-lines (point-min) (point-max))))
+      (if (zerop total-matches)
+          (progn (with-current-buffer occur-buffer
+                   (set-buffer-modified-p nil))
+                 (kill-buffer occur-buffer)
+                 (message "No matches for \"%s\"" regexp))
+        (with-current-buffer occur-buffer
+          (goto-char (point-min))
           (insert (propertize
-                   (format "%d matches for \"%s\" in file \
-\(from %d lines\): %s\n" match-count regexp line file)
-                   'face 'underline)))
-        (vlfi-occur-mode))
-      (display-buffer occur-buffer))))
+                   (format "%d matches from %d lines for \"%s\" \
+in file: %s" total-matches line regexp file)
+                   'face 'underline))
+          (set-buffer-modified-p nil)
+          (forward-char)
+          (vlfi-occur-mode))
+        (display-buffer occur-buffer)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; editing
