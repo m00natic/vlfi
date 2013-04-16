@@ -4,14 +4,15 @@ An Emacs mode that allows viewing, editing and searching in large
 files in chunks.  Batch size can be adjusted on the fly and bounds the
 memory that is to be used for operations on the file.
 
-This is a fork that builds on the bare bones GNU ELPA vlf.el.  It adds
-the following improvements:
+This mode builds on the bare bones GNU ELPA vlf.el.  It adds the
+following improvements:
 
 - proper dealing with Unicode
 - regular expression search on whole file (in constant memory
   determined by current batch size)
 - chunk editing (if size has changed, saving is done in constant
   memory determined by current batch size)
+- occur like indexing
 - options to jump to beginning, end or arbitrary file chunk
 - ability to jump/insert given number of batches at once
 - newly added content is acknowledged if file has changed size
