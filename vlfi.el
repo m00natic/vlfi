@@ -526,6 +526,8 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
   (let ((map (make-sparse-keymap)))
     (define-key map "n" 'vlfi-occur-next-match)
     (define-key map "p" 'vlfi-occur-prev-match)
+    (define-key map "\C-m" 'vlfi-occur-visit)
+    (define-key map [mouse-1] 'vlfi-occur-visit)
     map)
   "Keymap for command `vlfi-occur-mode'.")
 
@@ -550,6 +552,34 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
     (goto-char (or (previous-single-property-change (point) 'face)
                    (point-max)))))
 
+(defun vlfi-occur-visit (&optional event)
+  "Visit current `vlfi-occur' link in a vlfi buffer.
+The same for mouse EVENT."
+  (interactive (list last-nonmenu-event))
+  (when event
+    (switch-to-buffer (window-buffer (posn-window (event-end event))))
+    (goto-char (posn-point (event-end event))))
+  (let* ((pos (point))
+         (pos-relative (- pos (line-beginning-position)))
+         (file (get-char-property pos 'file)))
+    (if file
+        (let ((chunk-start (get-char-property pos 'chunk-start))
+              (chunk-end (get-char-property pos 'chunk-end))
+              (buffer (get-char-property pos 'buffer))
+              (match-pos (or (get-char-property pos 'match-pos)
+                             (+ (get-char-property pos 'line-pos)
+                                (if (< 8 pos-relative)
+                                    (- pos-relative 8)
+                                  0)))))
+          (unless (buffer-live-p buffer)
+            (let ((occur-buffer (current-buffer)))
+              (setq buffer (vlfi file))
+              (switch-to-buffer occur-buffer)))
+          (pop-to-buffer buffer)
+          (vlfi-move-to-chunk chunk-start chunk-end)
+          (set-buffer buffer)
+          (goto-char match-pos)))))
+
 (defun vlfi-occur (regexp)
   "Make occur style index for REGEXP."
   (interactive (list (read-regexp "List lines matching regexp"
@@ -567,7 +597,7 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
 (defun vlfi-build-occur (regexp)
   "Build occur style index for REGEXP."
   (let ((line 1)
-        (last-line-result 0)
+        (last-match-line 0)
         (last-line-pos (point-min))
         (file buffer-file-name)
         (match-end-pos (+ vlfi-start-pos (position-bytes (point))))
@@ -592,30 +622,42 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
                   (if (match-string 5)
                       (setq line (1+ line)
                             last-line-pos (point))
-                    (let ((line-text (buffer-substring
-                                      (line-beginning-position)
-                                      (line-end-position))))
+                    (let* ((chunk-start vlfi-start-pos)
+                           (chunk-end vlfi-end-pos)
+                           (vlfi-buffer (current-buffer))
+                           (line-pos (line-beginning-position))
+                           (line-text (buffer-substring
+                                       line-pos (line-end-position))))
                       (with-current-buffer occur-buffer
-                        (or (= line last-line-result)
-                            (insert (propertize
-                                     (format "%6d:%s\n" line
-                                             line-text)
-                                     'file file
-                                     'chunk-start vlfi-start-pos
-                                     'chunk-end vlfi-end-pos
-                                     'match-pos
-                                     (match-beginning 10))))
+                        (unless (= line last-match-line)
+                          (insert (propertize
+                                   (format "%7d:" line)
+                                   'file file
+                                   'buffer vlfi-buffer
+                                   'chunk-start chunk-start
+                                   'chunk-end chunk-end
+                                   'face 'shadow
+                                   'mouse-face '(highlight)
+                                   'line-pos line-pos))
+                          (insert (propertize
+                                   (format "%s\n" line-text)
+                                   'file file
+                                   'buffer vlfi-buffer
+                                   'chunk-start chunk-start
+                                   'chunk-end chunk-end
+                                   'mouse-face '(highlight)
+                                   'line-pos line-pos)))
                         (forward-line -1)
                         (let ((line-start (+ (line-beginning-position)
-                                             7)))
+                                             8))
+                              (match-pos (match-beginning 10)))
                           (add-text-properties
-                           (+ line-start (match-beginning 10)
-                              (- last-line-pos))
+                           (+ line-start match-pos (- last-line-pos))
                            (+ line-start (match-end 10)
                               (- last-line-pos))
-                           (list 'face 'match)))
+                           (list 'face 'match 'match-pos match-pos)))
                         (forward-line)
-                        (setq last-line-result line)))))
+                        (setq last-match-line line)))))
               (let ((batch-move (- vlfi-end-pos batch-step)))
                 (vlfi-move-to-batch (if (< batch-move match-end-pos)
                                         match-end-pos
@@ -625,6 +667,8 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
                                                       vlfi-start-pos))
                                  (point-min))
                            (point-min)))
+              (setq last-match-line 0
+                    last-line-pos (point-min))
               (progress-reporter-update reporter vlfi-end-pos)))
           (progress-reporter-done reporter))
       (with-current-buffer occur-buffer
