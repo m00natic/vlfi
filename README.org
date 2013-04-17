@@ -49,10 +49,8 @@ example you can directly press digits to enter prefix arguments.
 
 ** Changing major mode
 
-You can temporarily change major mode to whatever you like.  Just
-*don't save*!  Turn to *vlfi-edit-mode* first (may need to mark buffer
-as modified if needed).  And you can return to *vlfi-mode* too if you
-haven't changed anything.
+You can temporarily change major mode to whatever you like.  Saving
+will insert contents as intended.  You can return to *vlfi-mode* too.
 
 * Detail usage
 
