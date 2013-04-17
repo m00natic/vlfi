@@ -528,6 +528,7 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
     (define-key map "p" 'vlfi-occur-prev-match)
     (define-key map "\C-m" 'vlfi-occur-visit)
     (define-key map [mouse-1] 'vlfi-occur-visit)
+    (define-key map "o" 'vlfi-occur-show)
     map)
   "Keymap for command `vlfi-occur-mode'.")
 
@@ -551,6 +552,19 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
   (while (not (eq (get-char-property (point) 'face) 'match))
     (goto-char (or (previous-single-property-change (point) 'face)
                    (point-max)))))
+
+(defun vlfi-occur-show (&optional event)
+  "Visit current `vlfi-occur' link in a vlfi buffer but stay in the \
+occur buffer.  If original VLFI buffer has been killed,
+open new VLFI session each time.
+EVENT may hold details of the invocation."
+  (interactive (list last-nonmenu-event))
+  (let ((occur-buffer (if event
+                          (window-buffer (posn-window
+                                          (event-end event)))
+                        (current-buffer))))
+    (vlfi-occur-visit event)
+    (pop-to-buffer occur-buffer)))
 
 (defun vlfi-occur-visit (&optional event)
   "Visit current `vlfi-occur' link in a vlfi buffer.
