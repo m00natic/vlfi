@@ -30,7 +30,7 @@
 ;; The buffer uses VLFI mode, which defines several commands for
 ;; moving around, searching and editing selected chunk of file.
 
-;; This package is an improved fork of the vlf.el package.
+;; This package is upgraded version of the vlf.el package.
 
 ;;; Code:
 
@@ -568,10 +568,12 @@ EVENT may hold details of the invocation."
 
 (defun vlfi-occur-visit (&optional event)
   "Visit current `vlfi-occur' link in a vlfi buffer.
-The same for mouse EVENT."
+If original VLFI buffer has been killed,
+open new VLFI session each time.
+EVENT may hold details of the invocation."
   (interactive (list last-nonmenu-event))
   (when event
-    (switch-to-buffer (window-buffer (posn-window (event-end event))))
+    (set-buffer (window-buffer (posn-window (event-end event))))
     (goto-char (posn-point (event-end event))))
   (let* ((pos (point))
          (pos-relative (- pos (line-beginning-position) 1))
@@ -589,11 +591,11 @@ The same for mouse EVENT."
               (switch-to-buffer occur-buffer)))
           (pop-to-buffer buffer)
           (vlfi-move-to-chunk chunk-start chunk-end)
-          (set-buffer buffer)
           (goto-char match-pos)))))
 
 (defun vlfi-occur (regexp)
-  "Make occur style index for REGEXP."
+  "Make whole file occur style index for REGEXP.
+Prematurely ending indexing will still show what's found so far."
   (interactive (list (read-regexp "List lines matching regexp"
                                   (if regexp-history
                                       (car regexp-history)))))
@@ -633,7 +635,7 @@ The same for mouse EVENT."
                                          (position-bytes
                                           (match-end 0))))
                   (if (match-string 5)
-                      (setq line (1+ line)
+                      (setq line (1+ line) ; line detected
                             last-line-pos (point))
                     (let* ((chunk-start vlfi-start-pos)
                            (chunk-end vlfi-end-pos)
@@ -642,8 +644,8 @@ The same for mouse EVENT."
                            (line-text (buffer-substring
                                        line-pos (line-end-position))))
                       (with-current-buffer occur-buffer
-                        (unless (= line last-match-line)
-                          (insert "\n:")
+                        (unless (= line last-match-line) ;new match line
+                          (insert "\n:") ; insert line number
                           (let* ((overlay-pos (1- (point)))
                                  (overlay (make-overlay
                                            overlay-pos
@@ -652,7 +654,7 @@ The same for mouse EVENT."
                                          (propertize
                                           (number-to-string line)
                                           'face 'shadow)))
-                          (insert (propertize line-text
+                          (insert (propertize line-text ; insert line
                                               'file file
                                               'buffer vlfi-buffer
                                               'chunk-start chunk-start
@@ -667,7 +669,7 @@ The same for mouse EVENT."
                         (let ((line-start (+ (line-beginning-position)
                                              1))
                               (match-pos (match-beginning 10)))
-                          (add-text-properties
+                          (add-text-properties ; mark match
                            (+ line-start match-pos (- last-line-pos))
                            (+ line-start (match-end 10)
                               (- last-line-pos))
@@ -700,7 +702,7 @@ The same for mouse EVENT."
 in file: %s" total-matches line regexp file)
                    'face 'underline))
           (set-buffer-modified-p nil)
-          (forward-char)
+          (forward-char 2)
           (vlfi-occur-mode))
         (display-buffer occur-buffer)))))
 
