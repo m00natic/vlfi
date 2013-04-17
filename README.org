@@ -18,4 +18,68 @@ following improvements:
 - newly added content is acknowledged if file has changed size
   meanwhile
 - automatic scrolling of batches
-- vlfi is added as an option when opening large files
+- VLFI is added as an option when opening large files and given dired
+  key-binding
+
+GNU Emacs 23 and 24 are supported.
+
+* Overview and tips
+
+M-x vlfi PATH-TO-FILE
+
+Emacs' Unicode support is leveraged so you'll not see bare bytes but
+characters decoded as if the file is normally opened.  Same holds for
+editing, search and indexing.
+
+Regular Emacs integers are used, so if you have really huge file and
+Emacs doesn't have bignum support, VLFI will choke.
+
+*vlfi-batch-size* bounds the memory used for all operations.
+
+VLFI is derived from special mode and keeps all its properties.  For
+example you can directly press digits to enter prefix arguments.
+
+* Detail usage
+
+** Controlling batch size
+
+*+* and *-* control current batch size by factors of 2.
+
+You can also set by hand local variable *vlfi-batch-size* and then
+refresh with *g*.
+
+** Moving around
+
+*M-PgUp* and *M-PgDn* move chunk by chunk.  With positive prefix
+argument they move prefix number of batches.  With negative - append
+prefix number of batches.
+
+*[* and *]* take you to the beginning and end of file respectively.
+
+*j* jumps to given chunk (to see where you are in file and how many chunks
+there are using the current batch size, look at the bracketed part of
+the buffer name, batch size is also there - at the end).
+
+** Searching whole file
+
+*s* and *r* search forward and backward respectively over the whole
+file.  This is done by chunk by chunk so if you have really huge
+file - you'd better set somewhat bigger batch size beforehand.
+
+*l* jumps to given line in file.  This is done by searching from the
+beginning, so again the bigger current batch size, the quicker.
+
+** Editting
+
+*e* enters VLFI in editing mode.  If editing doesn't change size of
+the chunk, only this chunk is saved.  Otherwise the remaining part of
+the file is adjusted chunk by chunk, so again you'd better have bigger
+current batch size.  If chunk has been expanded the memory used is
+(batch size + difference to the original chunk size) x 2.
+
+** Occur over whole file
+
+*o* builds index for given regular expression just like occur-mode.
+It does this chunk by chunk over the whole file.  Note that if even if
+you prematurely stop it with *C-g*, it will still show index of what's
+found so far.
