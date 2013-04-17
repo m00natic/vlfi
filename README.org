@@ -27,17 +27,32 @@ GNU Emacs 23 and 24 are supported.
 
 M-x vlfi PATH-TO-FILE
 
+** Unicode
+
 Emacs' Unicode support is leveraged so you'll not see bare bytes but
-characters decoded as if the file is normally opened.  Same holds for
+characters decoded as if file is normally opened.  This holds for
 editing, search and indexing.
 
+** Bignums
+
 Regular Emacs integers are used, so if you have really huge file and
-Emacs doesn't have bignum support, VLFI will choke.
+Emacs doesn't have bignum support, VLFI will probably not quite work.
+
+** Memory control
 
 *vlfi-batch-size* bounds the memory used for all operations.
 
+** Special mode
+
 VLFI is derived from special mode and keeps all its properties.  For
 example you can directly press digits to enter prefix arguments.
+
+** Changing major mode
+
+You can temporarily change major mode to whatever you like.  Just
+*don't save*!  Turn to *vlfi-edit-mode* first (may need to mark buffer
+as modified if needed).  And you can return to *vlfi-mode* too if you
+haven't changed anything.
 
 * Detail usage
 
