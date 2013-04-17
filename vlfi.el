@@ -722,6 +722,7 @@ in file: %s" total-matches line regexp file)
     (set-keymap-parent map text-mode-map)
     (define-key map "\C-c\C-c" 'vlfi-write)
     (define-key map "\C-c\C-q" 'vlfi-discard-edit)
+    (define-key map "\C-v" vlfi-mode-map)
     map)
   "Keymap for command `vlfi-edit-mode'.")
 
