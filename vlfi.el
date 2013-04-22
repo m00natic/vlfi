@@ -438,7 +438,7 @@ Return number of bytes moved back for this to happen."
                                       (or (byte-to-position
                                            (- match-end-pos
                                               vlfi-start-pos))
-                                          (point-max))
+                                          (point-min))
                                     (point-min)))
                        (progress-reporter-update reporter
                                                  vlfi-end-pos)))))
@@ -583,9 +583,8 @@ EVENT may hold details of the invocation."
         (let ((chunk-start (get-char-property pos 'chunk-start))
               (chunk-end (get-char-property pos 'chunk-end))
               (buffer (get-char-property pos 'buffer))
-              (match-pos (or (get-char-property pos 'match-pos)
-                             (+ (get-char-property pos 'line-pos)
-                                pos-relative))))
+              (match-pos (+ (get-char-property pos 'line-pos)
+                            pos-relative)))
           (or (buffer-live-p buffer)
               (let ((occur-buffer (current-buffer)))
                 (setq buffer (vlfi file))
@@ -632,12 +631,13 @@ Prematurely ending indexing will still show what's found so far."
         (line-regexp (concat "\\(?5:[\n\C-m]\\)\\|\\(?10:"
                              regexp "\\)"))
         (batch-step (/ vlfi-batch-size 8))
+        (end-of-file nil)
         (reporter (make-progress-reporter
                    (concat "Building index for " regexp "...")
                    vlfi-start-pos vlfi-file-size)))
     (unwind-protect
         (progn
-          (while (/= vlfi-end-pos vlfi-file-size)
+          (while (not end-of-file)
             (if (re-search-forward line-regexp nil t)
                 (progn
                   (setq match-end-pos (+ vlfi-start-pos
@@ -675,29 +675,31 @@ Prematurely ending indexing will still show what's found so far."
                                                       line))))
                         (setq last-match-line line
                               total-matches (1+ total-matches))
-                        (let ((line-start (+ (line-beginning-position)
-                                             1))
+                        (let ((line-start (1+
+                                           (line-beginning-position)))
                               (match-pos (match-beginning 10)))
                           (add-text-properties ; mark match
                            (+ line-start match-pos (- last-line-pos))
                            (+ line-start (match-end 10)
                               (- last-line-pos))
-                           (list 'face 'match 'match-pos match-pos
+                           (list 'face 'match
                                  'help-echo
                                  (format "Move to match %d"
                                          total-matches))))))))
-              (let ((batch-move (- vlfi-end-pos batch-step)))
-                (vlfi-move-to-batch (if (< batch-move match-end-pos)
-                                        match-end-pos
-                                      batch-move) t))
-              (goto-char (if (< vlfi-start-pos match-end-pos)
-                             (or (byte-to-position (- match-end-pos
-                                                      vlfi-start-pos))
-                                 (point-min))
-                           (point-min)))
-              (setq last-match-line 0
-                    last-line-pos (point-min))
-              (progress-reporter-update reporter vlfi-end-pos)))
+              (setq end-of-file (= vlfi-end-pos vlfi-file-size))
+              (unless end-of-file
+                (let ((batch-move (- vlfi-end-pos batch-step)))
+                  (vlfi-move-to-batch (if (< batch-move match-end-pos)
+                                          match-end-pos
+                                        batch-move) t))
+                (goto-char (if (< vlfi-start-pos match-end-pos)
+                               (or (byte-to-position (- match-end-pos
+                                                        vlfi-start-pos))
+                                   (point-min))
+                             (point-min)))
+                (setq last-match-line 0
+                      last-line-pos (line-beginning-position))
+                (progress-reporter-update reporter vlfi-end-pos))))
           (progress-reporter-done reporter))
       (if (zerop total-matches)
           (progn (with-current-buffer occur-buffer
@@ -738,6 +740,7 @@ or \\[vlfi-discard-edit] to discard changes.")))
 (defun vlfi-discard-edit ()
   "Discard edit and refresh chunk from file."
   (interactive)
+  (set-buffer-modified-p nil)
   (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)
   (vlfi-mode)
   (message "Switched to VLFI mode."))
