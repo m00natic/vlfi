@@ -167,11 +167,11 @@ OP-TYPE specifies the file operation being performed over FILENAME."
              (goto-char (point-max)))
     ad-do-it))
 
-;; non recent Emacs
+;; non-recent Emacs
 (unless (fboundp 'file-size-human-readable)
   (defun file-size-human-readable (file-size)
     "Print FILE-SIZE in MB."
-    (format "%.1fMB" (/ file-size 1024.0))))
+    (format "%.1fMB" (/ file-size 1048576.0))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; utilities
