@@ -296,6 +296,7 @@ When given MINIMAL flag, skip non important operations."
     (let ((changed (not (verify-visited-file-modtime
                          (current-buffer))))
           (modified (buffer-modified-p))
+          (inhibit-read-only t)
           (start (max 0 start))
           (end (min end vlfi-file-size)))
       (if changed
@@ -310,13 +311,14 @@ When given MINIMAL flag, skip non important operations."
                 (throw 'abort nil))
             (setq vlfi-start-pos start
                   vlfi-end-pos end)
-            (let ((inhibit-read-only t)
-                  (pos (position-bytes (point))))
+            (let ((pos (position-bytes (point))))
               (erase-buffer)
               (insert-file-contents-literally
                buffer-file-name nil vlfi-start-pos vlfi-end-pos)
-              (goto-char (or (byte-to-position
-                              (+ pos (vlfi-adjust-chunk)))
+              (setq pos (+ pos (vlfi-prepare-chunk)))
+              (decode-coding-region (point-min) (point-max)
+                                    buffer-file-coding-system)
+              (goto-char (or (byte-to-position pos)
                              (point-max))))
             (set-buffer-modified-p nil))
         (if (and modified
@@ -324,19 +326,16 @@ When given MINIMAL flag, skip non important operations."
                      (< 3 (- start vlfi-start-pos)))
                  (not (y-or-n-p "Buffer modified, are you sure? ")))
             (throw 'abort nil))
-        (let ((pos (+ (position-bytes (point))
+        (let* ((pos (+ (position-bytes (point))
                       vlfi-start-pos))
-              (adjust-encoding (or (< vlfi-end-pos end)
-                                   (< start vlfi-start-pos)))
-              (adjust-chunk (< start vlfi-start-pos)))
+               (adjust-chunk (< start vlfi-start-pos))
+               (adjust-encoding (or adjust-chunk
+                                    (< vlfi-end-pos end))))
           (if adjust-encoding
-              (let ((inhibit-read-only t))
-                (encode-coding-region (point-min) (point-max)
-                                      buffer-file-coding-system)))
-          (vlfi-print-offset "require goto:" start end)
+              (encode-coding-region (point-min) (point-max)
+                                    buffer-file-coding-system))
           (cond ((< end vlfi-end-pos)       ; adjust ends
-                 (let ((inhibit-read-only t)
-                       (offset (- end vlfi-start-pos)))
+                 (let ((offset (- end vlfi-start-pos)))
                    (if adjust-encoding
                        (progn (delete-region offset (point-max))
                               (setq vlfi-end-pos end)))
@@ -347,19 +346,16 @@ When given MINIMAL flag, skip non important operations."
                                           (1- offset))))))
                 ((< vlfi-end-pos end)
                  (goto-char (point-max))
-                 (let ((inhibit-read-only t))
-                   (insert-file-contents-literally
-                    buffer-file-name nil vlfi-end-pos end))
+                 (insert-file-contents-literally
+                  buffer-file-name nil vlfi-end-pos end)
                  (setq vlfi-end-pos end)))
           (cond ((< start vlfi-start-pos)   ; adjust start
                  (goto-char (point-min))
-                 (let ((inhibit-read-only t))
-                   (insert-file-contents-literally
-                    buffer-file-name nil start vlfi-start-pos))
+                 (insert-file-contents-literally
+                  buffer-file-name nil start vlfi-start-pos)
                  (setq vlfi-start-pos start))
                 ((< 3 (- start vlfi-start-pos))
-                 (let ((inhibit-read-only t)
-                       (offset (- start vlfi-start-pos)))
+                 (let ((offset (- start vlfi-start-pos)))
                    (if adjust-encoding
                        (progn (delete-region (point-min) offset)
                               (setq vlfi-start-pos start))
@@ -369,12 +365,11 @@ When given MINIMAL flag, skip non important operations."
                                               (1+ offset))))
                      (delete-region (point-min) offset)))
                  (setq vlfi-start-pos start)))
-          (vlfi-print-offset "actual goto:" vlfi-start-pos vlfi-end-pos)
-          (if adjust-chunk (vlfi-adjust-chunk))
-          (if adjust-encoding
-              (let ((inhibit-read-only t))
-                (decode-coding-region (point-min) (point-max)
-                                      buffer-file-coding-system)))
+          (when adjust-encoding
+            (if adjust-chunk
+                (vlfi-prepare-chunk))
+            (decode-coding-region (point-min) (point-max)
+                                  buffer-file-coding-system))
           (or modified (set-buffer-modified-p nil))
           (goto-char
            (cond ((< pos vlfi-start-pos) (point-min))
@@ -384,38 +379,49 @@ When given MINIMAL flag, skip non important operations."
       (if changed (set-visited-file-modtime)))
     (or minimal (vlfi-update-buffer-name))))
 
-(defun vlfi-print-offset (text start end)
-  (message "%s: %d %d" text start end))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; encoding
 
-(defun vlfi-adjust-chunk ()
-  "Adjust chunk beginning until content can be properly decoded.
+(defun vlfi-prepare-chunk ()
+  "Apply proper decoding and adjust chunk start if needed.
 Return number of bytes moved back for this to happen."
-  (with-coding-priority '(utf-8)
-    (setq buffer-file-coding-system 'utf-8;; (detect-coding-region (point-min)
-          ;;                 (point-max)
-          ;;                 t)
-          )
-    (let ((shift 0)
-          (inhibit-read-only t))
-      (while (and (not (zerop vlfi-start-pos))
-                  (< shift 3)
-                  (/= (- vlfi-end-pos vlfi-start-pos)
-                      (length (encode-coding-string
-                               (decode-coding-region
-                                (point-min) (point-max)
-                                buffer-file-coding-system t)
-                               buffer-file-coding-system t))))
-        (setq shift (1+ shift)
-              vlfi-start-pos (1- vlfi-start-pos))
-        (goto-char (point-min))
-        (insert-file-contents-literally
-         buffer-file-name nil vlfi-start-pos (1+ vlfi-start-pos))
-        (setq buffer-file-coding-system 'utf-8
-              ;; (detect-coding-region (point-min) (point-max) t)
-              ))
-      (decode-coding-region (point-min) (point-max)
-                            buffer-file-coding-system)
-      shift)))
+  (let ((status (vlfi-adjust-chunk 'utf-8)))
+    (unless (car status)          ; no success with utf-8, auto-detect
+      (delete-region (point-min) (+ (point-min) (cdr status)))
+      (setq vlfi-start-pos (+ vlfi-start-pos (cdr status))
+            status (vlfi-adjust-chunk)))
+    (cdr status)))
+
+(defun vlfi-adjust-chunk (&optional encoding)
+  "Adjust chunk beginning until content can be properly decoded.
+Try with explicit ENCODING if given, otherwise auto-detect.
+Return cons \(success-status . number-of-bytes-moved-back\)."
+  (setq buffer-file-coding-system
+        (or encoding
+            (detect-coding-region (point-min) (point-max) t)))
+  (let ((shift 0)
+        (success nil)
+        (chunk-size (- vlfi-end-pos vlfi-start-pos)))
+    (while (and (< shift 4)
+                (not (setq success (vlfi-decode-status chunk-size)))
+                (not (zerop vlfi-start-pos)))
+      (goto-char (point-min))
+      (insert-file-contents-literally   ; insert 1 byte
+       buffer-file-name nil (1- vlfi-start-pos) vlfi-start-pos)
+      (setq shift (1+ shift)
+            chunk-size (1+ chunk-size)
+            vlfi-start-pos (1- vlfi-start-pos)
+            buffer-file-coding-system
+            (or encoding
+                (detect-coding-region (point-min) (point-max) t))))
+    (cons success shift)))
+
+(defun vlfi-decode-status (size)
+  "Check if decoding followed by encoding results in SIZE bytes."
+  (= size (length (encode-coding-string
+                   (decode-coding-region (point-min) (point-max)
+                                         buffer-file-coding-system t)
+                   buffer-file-coding-system t))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; search
