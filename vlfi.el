@@ -47,8 +47,7 @@
 ;;; Keep track of file position.
 (defvar vlfi-start-pos 0
   "Absolute position of the visible chunk start.")
-(defvar vlfi-end-pos vlfi-batch-size
-  "Absolute position of the visible chunk end.")
+(defvar vlfi-end-pos 0 "Absolute position of the visible chunk end.")
 (defvar vlfi-file-size 0 "Total size of presented file.")
 
 (defvar vlfi-mode-map
@@ -97,10 +96,10 @@ buffer.  You can customize number of bytes displayed by customizing
 `vlfi-batch-size'."
   (interactive "fFile to open: ")
   (with-current-buffer (generate-new-buffer "*vlfi*")
+    (vlfi-mode)
     (setq buffer-file-name file
           vlfi-file-size (vlfi-get-file-size file))
     (vlfi-insert-file)
-    (vlfi-mode)
     (switch-to-buffer (current-buffer))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -350,15 +349,17 @@ When given MINIMAL flag, skip non important operations."
 (defun vlfi-adjust-chunk ()
   "Adjust chunk beginning until content can be properly decoded.
 Return number of bytes moved back for this to happen."
-  (let ((shift 0))
+  (let ((shift 0)
+        (chunk-size (- vlfi-end-pos vlfi-start-pos)))
     (while (and (not (zerop vlfi-start-pos))
-                (< shift 3)
-                (/= (- vlfi-end-pos vlfi-start-pos)
+                (< shift 4)
+                (/= chunk-size
                     (length (encode-coding-region
                              (point-min) (point-max)
                              buffer-file-coding-system t))))
       (setq shift (1+ shift)
-            vlfi-start-pos (1- vlfi-start-pos))
+            vlfi-start-pos (1- vlfi-start-pos)
+            chunk-size (1+ chunk-size))
       (let ((inhibit-read-only t))
         (erase-buffer)
         (insert-file-contents buffer-file-name nil
