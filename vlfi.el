@@ -370,8 +370,9 @@ Return number of bytes moved back for this to happen."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; search
 
-(defun vlfi-re-search (regexp count backward)
-  "Search for REGEXP COUNT number of times forward or BACKWARD."
+(defun vlfi-re-search (regexp count backward batch-step)
+  "Search for REGEXP COUNT number of times forward or BACKWARD.
+BATCH-STEP is amount of overlap between successive chunks."
   (let* ((match-chunk-start vlfi-start-pos)
          (match-chunk-end vlfi-end-pos)
          (match-start-pos (+ vlfi-start-pos (position-bytes (point))))
@@ -382,8 +383,7 @@ Return number of bytes moved back for this to happen."
                     (if backward
                         (- vlfi-file-size vlfi-end-pos)
                       vlfi-start-pos)
-                    vlfi-file-size))
-         (batch-step (/ vlfi-batch-size 8))) ; amount of chunk overlap
+                    vlfi-file-size)))
     (unwind-protect
         (catch 'end-of-file
           (if backward
@@ -494,7 +494,7 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
                                   (if regexp-history
                                       (car regexp-history)))
                      (or current-prefix-arg 1)))
-  (vlfi-re-search regexp count nil))
+  (vlfi-re-search regexp count nil (/ vlfi-batch-size 8)))
 
 (defun vlfi-re-search-backward (regexp count)
   "Search backward for REGEXP prefix COUNT number of times.
@@ -503,7 +503,7 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
                                   (if regexp-history
                                       (car regexp-history)))
                      (or current-prefix-arg 1)))
-  (vlfi-re-search regexp count t))
+  (vlfi-re-search regexp count t (/ vlfi-batch-size 8)))
 
 (defun vlfi-goto-line (n)
   "Go to line N."
@@ -515,8 +515,8 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
     (unwind-protect
         (progn (vlfi-beginning-of-file)
                (goto-char (point-min))
-               (setq success (vlfi-re-search-forward "[\n\C-m]"
-                                                     (1- n))))
+               (setq success (vlfi-re-search "[\n\C-m]" (1- n)
+                                             nil 0)))
       (unless success
         (vlfi-move-to-chunk start-pos end-pos)
         (goto-char pos)))))
