@@ -26,9 +26,9 @@
 ;;; Commentary:
 
 ;; This package provides the M-x vlfi command, which visits part of a
-;; large file in a read-only buffer without visiting the entire file.
+;; large file without loading the entire file.
 ;; The buffer uses VLFI mode, which defines several commands for
-;; moving around, searching and editing selected chunk of file.
+;; moving around, searching and editing selected part of file.
 
 ;; This package is upgraded version of the vlf.el package.
 
