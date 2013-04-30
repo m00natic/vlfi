@@ -33,10 +33,11 @@ Emacs' Unicode support is leveraged so you'll not see bare bytes but
 characters decoded as if file is normally opened.  This holds for
 editing, search and indexing.
 
-** Bignums
+** 32-bit GNU/Emacs
 
-Regular Emacs integers are used, so if you have really huge file and
-Emacs doesn't have bignum support, VLFI will probably not quite work.
+Regular Emacs integers are used, so if you use 32-bit Emacs without
+bignum support and have really huge file (with size beyond the maximum
+integer value), VLFI will probably not quite work.
 
 ** Memory control
 
@@ -49,8 +50,9 @@ example you can directly press digits to enter prefix arguments.
 
 ** Changing major mode
 
-You can temporarily change major mode to whatever you like.  Saving
-will insert contents as intended.  You can return to *vlfi-mode* too.
+You can (temporarily) change major mode to whatever you like (for
+example hexl-mode).  Saving will insert contents as intended.  You can
+return to *vlfi-mode* too.
 
 * Detail usage
 
@@ -82,17 +84,20 @@ you'd better set somewhat bigger batch size beforehand.
 *l* jumps to given line in file.  This is done by searching from the
 beginning, so again the bigger current batch size, the quicker.
 
-** Edit
-
-*e* enters VLFI in edit mode.  If editing doesn't change size of
-the chunk, only this chunk is saved.  Otherwise the remaining part of
-the file is adjusted chunk by chunk, so again you'd better have bigger
-current batch size.  If chunk has been expanded the memory used is
-(batch size + difference to the original chunk size) x 2.
-
 ** Occur over whole file
 
 *o* builds index for given regular expression just like occur-mode.
 It does this chunk by chunk over the whole file.  Note that even if
 you prematurely stop it with *C-g*, it will still show index of what's
 found so far.
+
+** Edit
+
+*e* enters VLFI in edit mode.  If editing doesn't change size of
+the chunk, only this chunk is saved.  Otherwise the remaining part of
+the file is adjusted chunk by chunk, so again you'd better have bigger
+current batch size.  If chunk has been expanded the memory used is
+
+#+BEGIN_EXAMPLE
+(batch size + difference to the original chunk size) x 2
+#+END_EXAMPLE
