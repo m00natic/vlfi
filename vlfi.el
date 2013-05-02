@@ -373,6 +373,7 @@ Return number of bytes moved back for this to happen."
 (defun vlfi-re-search (regexp count backward batch-step)
   "Search for REGEXP COUNT number of times forward or BACKWARD.
 BATCH-STEP is amount of overlap between successive chunks."
+  (assert (< 0 count))
   (let* ((match-chunk-start vlfi-start-pos)
          (match-chunk-end vlfi-end-pos)
          (match-start-pos (+ vlfi-start-pos (position-bytes (point))))
@@ -506,18 +507,23 @@ Search is performed chunk by chunk in `vlfi-batch-size' memory."
   (vlfi-re-search regexp count t (/ vlfi-batch-size 8)))
 
 (defun vlfi-goto-line (n)
-  "Go to line N."
+  "Go to line N.  If N is negative, count from the end of file."
   (interactive "nGo to line: ")
   (let ((start-pos vlfi-start-pos)
         (end-pos vlfi-end-pos)
         (pos (point))
         (success nil))
     (unwind-protect
-        (progn (vlfi-beginning-of-file)
-               (goto-char (point-min))
-               (setq success (vlfi-re-search "[\n\C-m]" (1- n)
-                                             nil 0)))
-      (unless success
+        (if (< 0 n)
+            (progn (vlfi-beginning-of-file)
+                   (goto-char (point-min))
+                   (setq success (vlfi-re-search "[\n\C-m]" (1- n)
+                                                 nil 0)))
+          (vlfi-end-of-file)
+          (goto-char (point-max))
+          (setq success (vlfi-re-search "[\n\C-m]" (- n) t 0)))
+      (if success
+          (message "Onto line %s" n)
         (vlfi-move-to-chunk start-pos end-pos)
         (goto-char pos)))))
 
