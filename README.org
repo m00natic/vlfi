@@ -33,7 +33,7 @@ Emacs' Unicode support is leveraged so you'll not see bare bytes but
 characters decoded as if file is normally opened.  This holds for
 editing, search and indexing.
 
-** 32-bit GNU/Emacs
+** 32-bit GNU Emacs
 
 Regular Emacs integers are used, so if you use 32-bit Emacs without
 bignum support and have really huge file (with size beyond the maximum
@@ -81,15 +81,18 @@ of the buffer name, batch size is also there - at the end.
 file.  This is done chunk by chunk so if you have really huge file -
 you'd better set somewhat bigger batch size beforehand.
 
-*l* jumps to given line in file.  This is done by searching from the
-beginning, so again the bigger current batch size, the quicker.
-
 ** Occur over whole file
 
 *o* builds index for given regular expression just like occur-mode.
 It does this chunk by chunk over the whole file.  Note that even if
 you prematurely stop it with *C-g*, it will still show index of what's
 found so far.
+
+** Jump to line
+
+*l* jumps to given line in file.  This is done by searching from the
+beginning, so again the bigger current batch size, the quicker.  With
+negative argument, lines are counted from the end of file.
 
 ** Edit
 
