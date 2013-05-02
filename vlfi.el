@@ -200,9 +200,9 @@ with the prefix argument DECREASE it is halved."
   "Update the current buffer name."
   (rename-buffer (vlfi-format-buffer-name) t))
 
-(defmacro vlfi-get-file-size (file)
+(defun vlfi-get-file-size (file)
   "Get size in bytes of FILE."
-  `(nth 7 (file-attributes ,file)))
+  (nth 7 (file-attributes file)))
 
 (defun vlfi-insert-file (&optional from-end)
   "Insert first chunk of current file contents in current buffer.
