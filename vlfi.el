@@ -822,8 +822,8 @@ Save anyway? ")))
             (t (vlfi-file-shift-forward (- size-change))))
       (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)
       (goto-char pos))
-    (vlfi-mode)
-    t))
+    (vlfi-mode))
+  t)
 
 (defun vlfi-file-shift-back (size-change)
   "Shift file contents SIZE-CHANGE bytes back."
