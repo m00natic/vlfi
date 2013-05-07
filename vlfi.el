@@ -619,9 +619,9 @@ Prematurely ending indexing will still show what's found so far."
         (pos (point)))
     (vlfi-beginning-of-file)
     (goto-char (point-min))
-    (vlfi-build-occur regexp)
-    (vlfi-move-to-chunk start-pos end-pos)
-    (goto-char pos)))
+    (unwind-protect (vlfi-build-occur regexp)
+      (vlfi-move-to-chunk start-pos end-pos)
+      (goto-char pos))))
 
 (defun vlfi-build-occur (regexp)
   "Build occur style index for REGEXP."
