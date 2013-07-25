@@ -96,6 +96,7 @@ buffer.  You can customize number of bytes displayed by customizing
 `vlfi-batch-size'."
   (interactive "fFile to open: ")
   (with-current-buffer (generate-new-buffer "*vlfi*")
+    (setq default-directory (file-name-directory (expand-file-name file)))
     (vlfi-mode)
     (setq buffer-file-name file
           vlfi-file-size (vlfi-get-file-size file))
