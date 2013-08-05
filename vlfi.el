@@ -49,6 +49,7 @@
   "Absolute position of the visible chunk start.")
 (defvar vlfi-end-pos 0 "Absolute position of the visible chunk end.")
 (defvar vlfi-file-size 0 "Total size of presented file.")
+(defvar vlfi-encode-size 0 "Size in bytes of current batch decoded.")
 
 (defvar vlfi-mode-map
   (let ((map (make-sparse-keymap)))
@@ -74,6 +75,8 @@
 (put 'vlfi-start-pos 'permanent-local t)
 (put 'vlfi-end-pos 'permanent-local t)
 (put 'vlfi-file-size 'permanent-local t)
+(put 'vlfi-encode-size 'permanent-local t)
+
 (define-derived-mode vlfi-mode special-mode "VLFI"
   "Mode to browse large files in."
   (setq buffer-read-only t)
@@ -346,15 +349,18 @@ When given MINIMAL flag, skip non important operations."
 
 (defun vlfi-adjust-chunk ()
   "Adjust chunk beginning until content can be properly decoded.
+Set `vlfi-encode-size' to size of buffer when encoded.
 Return number of bytes moved back for this to happen."
   (let ((shift 0)
         (chunk-size (- vlfi-end-pos vlfi-start-pos)))
-    (while (and (not (zerop vlfi-start-pos))
-                (< shift 4)
-                (/= chunk-size
-                    (length (encode-coding-region
-                             (point-min) (point-max)
-                             buffer-file-coding-system t))))
+    (while (and (< shift 4)
+                (< 4 (abs (- chunk-size
+                             (setq vlfi-encode-size
+                                   (length (encode-coding-region
+                                            (point-min) (point-max)
+                                            buffer-file-coding-system
+                                            t))))))
+                (not (zerop vlfi-start-pos)))
       (setq shift (1+ shift)
             vlfi-start-pos (1- vlfi-start-pos)
             chunk-size (1+ chunk-size))
@@ -755,17 +761,19 @@ or \\[vlfi-discard-edit] to discard changes.")))
 
 (defun vlfi-write ()
   "Write current chunk to file.  Always return true to disable save.
-If changing size of chunk shift remaining file content."
+If changing size of chunk, shift remaining file content."
   (interactive)
   (when (and (buffer-modified-p)
              (or (verify-visited-file-modtime (current-buffer))
                  (y-or-n-p "File has changed since visited or saved.  \
 Save anyway? ")))
     (let ((pos (point))
-          (size-change (- vlfi-end-pos vlfi-start-pos
-                          (length (encode-coding-region
-                                   (point-min) (point-max)
-                                   buffer-file-coding-system t)))))
+          (size-change (- vlfi-encode-size
+                          (setq vlfi-encode-size
+                                (length (encode-coding-region
+                                         (point-min) (point-max)
+                                         buffer-file-coding-system
+                                         t))))))
       (cond ((zerop size-change)
              (write-region nil nil buffer-file-name vlfi-start-pos t))
             ((< 0 size-change)
