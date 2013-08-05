@@ -1,12 +1,14 @@
-;;; vlfi.el --- View Large Files Improved  -*- lexical-binding: t -*-
+;;; vlfi.el --- View Large Files  -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2006, 2012, 2013  Free Software Foundation, Inc.
 
-;; Version: 0.9
+;; Version: 0.9.1
 ;; Keywords: large files, utilities
+;; Maintainer: Andrey Kotlarski <m00naticus@gmail.com>
 ;; Authors: 2006 Mathias Dahl <mathias.dahl@gmail.com>
 ;;          2012 Sam Steingold <sds@gnu.org>
 ;;          2013 Andrey Kotlarski <m00naticus@gmail.com>
+;; URL: https://github.com/m00natic/vlfi
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -30,7 +32,9 @@
 ;; The buffer uses VLFI mode, which defines several commands for
 ;; moving around, searching and editing selected part of file.
 
-;; This package is upgraded version of the vlf.el package.
+;; This package was inspired by a snippet posted by Kevin Rodgers,
+;; showing how to use `insert-file-contents' to extract part of a
+;; file.
 
 ;;; Code:
 
