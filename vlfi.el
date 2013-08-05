@@ -225,13 +225,12 @@ With FROM-END prefix, start from the back."
   (interactive)
   (vlfi-insert-file t))
 
-(defun vlfi-revert (&optional ignore-auto noconfirm)
-  "Revert current chunk.  Ignore IGNORE-AUTO.
+(defun vlfi-revert (&optional _ignore-auto noconfirm)
+  "Revert current chunk.  Ignore _IGNORE-AUTO.
 Ask for confirmation if NOCONFIRM is nil."
-  (ignore ignore-auto)
-  (or noconfirm
-      (yes-or-no-p (format "Revert buffer from file %s? "
-                           buffer-file-name))
+  (if (or noconfirm
+          (yes-or-no-p (format "Revert buffer from file %s? "
+                               buffer-file-name)))
       (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)))
 
 (defun vlfi-jump-to-chunk (n)
