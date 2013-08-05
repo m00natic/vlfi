@@ -70,23 +70,22 @@
     map)
   "Keymap for `vlfi-mode'.")
 
+(put 'vlfi-batch-size 'permanent-local t)
+(put 'vlfi-start-pos 'permanent-local t)
+(put 'vlfi-end-pos 'permanent-local t)
+(put 'vlfi-file-size 'permanent-local t)
 (define-derived-mode vlfi-mode special-mode "VLFI"
   "Mode to browse large files in."
   (setq buffer-read-only t)
   (set-buffer-modified-p nil)
   (buffer-disable-undo)
-  (make-local-variable 'write-file-functions)
-  (add-hook 'write-file-functions 'vlfi-write)
+  (add-hook 'write-file-functions 'vlfi-write nil t)
   (make-local-variable 'revert-buffer-function)
   (setq revert-buffer-function 'vlfi-revert)
   (make-local-variable 'vlfi-batch-size)
-  (put 'vlfi-batch-size 'permanent-local t)
   (make-local-variable 'vlfi-start-pos)
-  (put 'vlfi-start-pos 'permanent-local t)
   (make-local-variable 'vlfi-end-pos)
-  (put 'vlfi-end-pos 'permanent-local t)
-  (make-local-variable 'vlfi-file-size)
-  (put 'vlfi-file-size 'permanent-local t))
+  (make-local-variable 'vlfi-file-size))
 
 ;;;###autoload
 (defun vlfi (file)
@@ -117,9 +116,12 @@ buffer.  You can customize number of bytes displayed by customizing
   '(define-key dired-mode-map "V" 'dired-vlfi))
 
 ;;;###autoload
-(defun vlfi-if-file-too-large (size op-type &optional filename)
+(defadvice abort-if-file-too-large (around vlfi-if-file-too-large
+                                           (size op-type
+                                                 &optional filename)
+                                           compile activate)
   "If file SIZE larger than `large-file-warning-threshold', \
-allow user to view file with `vlfi', open it normally or abort.
+allow user to view file with `vlfi', open it normally, or abort.
 OP-TYPE specifies the file operation being performed over FILENAME."
   (and large-file-warning-threshold size
        (> size large-file-warning-threshold)
@@ -144,15 +146,12 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                ((memq char '(?a ?A))
                 (error "Aborted"))))))
 
-;; hijack `abort-if-file-too-large'
-;;;###autoload
-(fset 'abort-if-file-too-large 'vlfi-if-file-too-large)
 
 ;; scroll auto batching
 (defadvice scroll-up (around vlfi-scroll-up
                              activate compile)
   "Slide to next batch if at end of buffer in `vlfi-mode'."
-  (if (and (eq major-mode 'vlfi-mode)
+  (if (and (derived-mode-p 'vlfi-mode)
            (eobp))
       (progn (vlfi-next-batch 1)
              (goto-char (point-min)))
@@ -161,7 +160,7 @@ OP-TYPE specifies the file operation being performed over FILENAME."
 (defadvice scroll-down (around vlfi-scroll-down
                                activate compile)
   "Slide to previous batch if at beginning of buffer  in `vlfi-mode'."
-  (if (and (eq major-mode 'vlfi-mode)
+  (if (and (derived-mode-p 'vlfi-mode)
            (bobp))
       (progn (vlfi-prev-batch 1)
              (goto-char (point-max)))
@@ -181,8 +180,6 @@ OP-TYPE specifies the file operation being performed over FILENAME."
 Normally, the value is doubled;
 with the prefix argument DECREASE it is halved."
   (interactive "P")
-  (or (assq 'vlfi-batch-size (buffer-local-variables))
-      (error "%s is not local in this buffer" 'vlfi-batch-size))
   (setq vlfi-batch-size (if decrease
                             (/ vlfi-batch-size 2)
                           (* vlfi-batch-size 2)))
@@ -298,8 +295,8 @@ When prefix argument is negative
                           (if do-prepend
                               vlfi-start-pos
                             vlfi-end-pos))
-    (setq vlfi-start-pos start)
-    (setq pos (+ pos (vlfi-adjust-chunk)))
+    (setq vlfi-start-pos start
+          pos (+ pos (vlfi-adjust-chunk)))
     (goto-char (or (byte-to-position (- (position-bytes (point-max))
                                         pos))
                    (point-max))))
