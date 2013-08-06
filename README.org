@@ -1,13 +1,12 @@
-* View Large Files Improved
+* View Large Files
 
 An Emacs mode that allows viewing, editing and searching in large
 files in chunks.  Batch size can be adjusted on the fly and bounds the
 memory that is to be used for operations on the file.
 
-This mode builds on the bare bones GNU ELPA vlf.el.  It adds the
-following improvements:
+This is development version of the GNU ELPA [[http://elpa.gnu.org/packages/vlf][vlf.el]] package.  Here's
+what it does in a nutshell:
 
-- proper dealing with Unicode
 - regular expression search on whole file (in constant memory
   determined by current batch size)
 - chunk editing (if size has changed, saving is done in constant
@@ -18,8 +17,7 @@ following improvements:
 - newly added content is acknowledged if file has changed size
   meanwhile
 - automatic scrolling of batches
-- VLFI is added as an option when opening large files and given dired
-  key-binding
+- VLFI is added as an option when opening large files
 
 GNU Emacs 23 and 24 are supported.
 
@@ -48,15 +46,15 @@ integer value), VLFI will probably not quite work.
 VLFI is derived from special-mode and keeps all its properties.  For
 example you can directly press digits to enter prefix arguments.
 
-** Changing major mode
+** Change major mode
 
-You can (temporarily) change major mode to whatever you like (for
-example hexl-mode).  Saving will insert contents as intended.  You can
-return to *vlfi-mode* too.
+You can change major mode to whatever you like (for example
+hexl-mode).  Saving will insert contents as intended.  You can return
+to *vlfi-mode* too.
 
 * Detail usage
 
-** Controlling batch size
+** Control batch size
 
 *+* and *-* control current batch size by factors of 2.
 

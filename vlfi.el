@@ -1,12 +1,14 @@
-;;; vlfi.el --- View Large Files Improved  -*- lexical-binding: t -*-
+;;; vlfi.el --- View Large Files  -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2006, 2012, 2013  Free Software Foundation, Inc.
 
-;; Version: 0.8
+;; Version: 0.9.1
 ;; Keywords: large files, utilities
+;; Maintainer: Andrey Kotlarski <m00naticus@gmail.com>
 ;; Authors: 2006 Mathias Dahl <mathias.dahl@gmail.com>
 ;;          2012 Sam Steingold <sds@gnu.org>
 ;;          2013 Andrey Kotlarski <m00naticus@gmail.com>
+;; URL: https://github.com/m00natic/vlfi
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -30,7 +32,9 @@
 ;; The buffer uses VLFI mode, which defines several commands for
 ;; moving around, searching and editing selected part of file.
 
-;; This package is upgraded version of the vlf.el package.
+;; This package was inspired by a snippet posted by Kevin Rodgers,
+;; showing how to use `insert-file-contents' to extract part of a
+;; file.
 
 ;;; Code:
 
@@ -49,6 +53,7 @@
   "Absolute position of the visible chunk start.")
 (defvar vlfi-end-pos 0 "Absolute position of the visible chunk end.")
 (defvar vlfi-file-size 0 "Total size of presented file.")
+(defvar vlfi-encode-size 0 "Size in bytes of current batch decoded.")
 
 (defvar vlfi-mode-map
   (let ((map (make-sparse-keymap)))
@@ -70,23 +75,25 @@
     map)
   "Keymap for `vlfi-mode'.")
 
+(put 'vlfi-batch-size 'permanent-local t)
+(put 'vlfi-start-pos 'permanent-local t)
+(put 'vlfi-end-pos 'permanent-local t)
+(put 'vlfi-file-size 'permanent-local t)
+(put 'vlfi-encode-size 'permanent-local t)
+
 (define-derived-mode vlfi-mode special-mode "VLFI"
   "Mode to browse large files in."
   (setq buffer-read-only t)
   (set-buffer-modified-p nil)
   (buffer-disable-undo)
-  (make-local-variable 'write-file-functions)
-  (add-hook 'write-file-functions 'vlfi-write)
+  (add-hook 'write-file-functions 'vlfi-write nil t)
   (make-local-variable 'revert-buffer-function)
   (setq revert-buffer-function 'vlfi-revert)
   (make-local-variable 'vlfi-batch-size)
-  (put 'vlfi-batch-size 'permanent-local t)
   (make-local-variable 'vlfi-start-pos)
-  (put 'vlfi-start-pos 'permanent-local t)
   (make-local-variable 'vlfi-end-pos)
-  (put 'vlfi-end-pos 'permanent-local t)
   (make-local-variable 'vlfi-file-size)
-  (put 'vlfi-file-size 'permanent-local t))
+  (make-local-variable 'vlfi-encode-size))
 
 ;;;###autoload
 (defun vlfi (file)
@@ -96,9 +103,9 @@ buffer.  You can customize number of bytes displayed by customizing
 `vlfi-batch-size'."
   (interactive "fFile to open: ")
   (with-current-buffer (generate-new-buffer "*vlfi*")
+    (set-visited-file-name file)
     (vlfi-mode)
-    (setq buffer-file-name file
-          vlfi-file-size (vlfi-get-file-size file))
+    (setq vlfi-file-size (vlfi-get-file-size buffer-file-name))
     (vlfi-insert-file)
     (switch-to-buffer (current-buffer))))
 
@@ -116,9 +123,12 @@ buffer.  You can customize number of bytes displayed by customizing
   '(define-key dired-mode-map "V" 'dired-vlfi))
 
 ;;;###autoload
-(defun vlfi-if-file-too-large (size op-type &optional filename)
+(defadvice abort-if-file-too-large (around vlfi-if-file-too-large
+                                           (size op-type
+                                                 &optional filename)
+                                           compile activate)
   "If file SIZE larger than `large-file-warning-threshold', \
-allow user to view file with `vlfi', open it normally or abort.
+allow user to view file with `vlfi', open it normally, or abort.
 OP-TYPE specifies the file operation being performed over FILENAME."
   (and large-file-warning-threshold size
        (> size large-file-warning-threshold)
@@ -143,15 +153,12 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                ((memq char '(?a ?A))
                 (error "Aborted"))))))
 
-;; hijack `abort-if-file-too-large'
-;;;###autoload
-(fset 'abort-if-file-too-large 'vlfi-if-file-too-large)
 
 ;; scroll auto batching
 (defadvice scroll-up (around vlfi-scroll-up
                              activate compile)
   "Slide to next batch if at end of buffer in `vlfi-mode'."
-  (if (and (eq major-mode 'vlfi-mode)
+  (if (and (derived-mode-p 'vlfi-mode)
            (eobp))
       (progn (vlfi-next-batch 1)
              (goto-char (point-min)))
@@ -160,7 +167,7 @@ OP-TYPE specifies the file operation being performed over FILENAME."
 (defadvice scroll-down (around vlfi-scroll-down
                                activate compile)
   "Slide to previous batch if at beginning of buffer  in `vlfi-mode'."
-  (if (and (eq major-mode 'vlfi-mode)
+  (if (and (derived-mode-p 'vlfi-mode)
            (bobp))
       (progn (vlfi-prev-batch 1)
              (goto-char (point-max)))
@@ -180,8 +187,6 @@ OP-TYPE specifies the file operation being performed over FILENAME."
 Normally, the value is doubled;
 with the prefix argument DECREASE it is halved."
   (interactive "P")
-  (or (assq 'vlfi-batch-size (buffer-local-variables))
-      (error "%s is not local in this buffer" 'vlfi-batch-size))
   (setq vlfi-batch-size (if decrease
                             (/ vlfi-batch-size 2)
                           (* vlfi-batch-size 2)))
@@ -204,6 +209,12 @@ with the prefix argument DECREASE it is halved."
   "Get size in bytes of FILE."
   (nth 7 (file-attributes file)))
 
+(defun vlfi-verify-size ()
+  "Update file size information if necessary and visited file time."
+  (unless (verify-visited-file-modtime (current-buffer))
+    (setq vlfi-file-size (vlfi-get-file-size buffer-file-name))
+    (set-visited-file-modtime)))
+
 (defun vlfi-insert-file (&optional from-end)
   "Insert first chunk of current file contents in current buffer.
 With FROM-END prefix, start from the back."
@@ -225,13 +236,12 @@ With FROM-END prefix, start from the back."
   (interactive)
   (vlfi-insert-file t))
 
-(defun vlfi-revert (&optional ignore-auto noconfirm)
-  "Revert current chunk.  Ignore IGNORE-AUTO.
+(defun vlfi-revert (&optional _ignore-auto noconfirm)
+  "Revert current chunk.  Ignore _IGNORE-AUTO.
 Ask for confirmation if NOCONFIRM is nil."
-  (ignore ignore-auto)
-  (or noconfirm
-      (yes-or-no-p (format "Revert buffer from file %s? "
-                           buffer-file-name))
+  (if (or noconfirm
+          (yes-or-no-p (format "Revert buffer from file %s? "
+                               buffer-file-name)))
       (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)))
 
 (defun vlfi-jump-to-chunk (n)
@@ -249,8 +259,7 @@ When prefix argument is supplied and positive
 When prefix argument is negative
  append next APPEND number of batches to the existing buffer."
   (interactive "p")
-  (or (verify-visited-file-modtime (current-buffer))
-      (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
+  (vlfi-verify-size)
   (let* ((end (min (+ vlfi-end-pos (* vlfi-batch-size
                                       (abs append)))
                    vlfi-file-size))
@@ -279,8 +288,7 @@ When prefix argument is negative
   "Move to batch determined by START.
 Adjust according to file start/end and show `vlfi-batch-size' bytes.
 When given MINIMAL flag, skip non important operations."
-  (or (verify-visited-file-modtime (current-buffer))
-      (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
+  (vlfi-verify-size)
   (let ((start (max 0 start))
         (end (min (+ vlfi-start-pos vlfi-batch-size)
                   vlfi-file-size)))
@@ -417,10 +425,13 @@ Return cons \(success-status . number-of-bytes-moved-back\)."
 
 (defun vlfi-decode-status (size)
   "Check if decoding followed by encoding results in SIZE bytes."
-  (= size (length (encode-coding-string
-                   (decode-coding-region (point-min) (point-max)
-                                         buffer-file-coding-system t)
-                   buffer-file-coding-system t))))
+  (< (abs (- size (setq vlfi-encode-size
+                          (length (encode-coding-string
+                                   (decode-coding-region
+                                    (point-min) (point-max)
+                                    buffer-file-coding-system t)
+                                   buffer-file-coding-system t)))))
+     4))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; search
@@ -666,9 +677,9 @@ Prematurely ending indexing will still show what's found so far."
         (pos (point)))
     (vlfi-beginning-of-file)
     (goto-char (point-min))
-    (vlfi-build-occur regexp)
-    (vlfi-move-to-chunk start-pos end-pos)
-    (goto-char pos)))
+    (unwind-protect (vlfi-build-occur regexp)
+      (vlfi-move-to-chunk start-pos end-pos)
+      (goto-char pos))))
 
 (defun vlfi-build-occur (regexp)
   "Build occur style index for REGEXP."
@@ -804,17 +815,19 @@ or \\[vlfi-discard-edit] to discard changes.")))
 
 (defun vlfi-write ()
   "Write current chunk to file.  Always return true to disable save.
-If changing size of chunk shift remaining file content."
+If changing size of chunk, shift remaining file content."
   (interactive)
   (when (and (buffer-modified-p)
              (or (verify-visited-file-modtime (current-buffer))
                  (y-or-n-p "File has changed since visited or saved.  \
 Save anyway? ")))
     (let ((pos (point))
-          (size-change (- vlfi-end-pos vlfi-start-pos
-                          (length (encode-coding-region
-                                   (point-min) (point-max)
-                                   buffer-file-coding-system t)))))
+          (size-change (- vlfi-encode-size
+                          (setq vlfi-encode-size
+                                (length (encode-coding-region
+                                         (point-min) (point-max)
+                                         buffer-file-coding-system
+                                         t))))))
       (cond ((zerop size-change)
              (write-region nil nil buffer-file-name vlfi-start-pos t))
             ((< 0 size-change)
@@ -840,6 +853,7 @@ Save anyway? ")))
       (progress-reporter-update reporter read-start-pos))
     ;; pad end with space
     (erase-buffer)
+    (vlfi-verify-size)
     (insert-char 32 size-change)
     (write-region nil nil buffer-file-name (- vlfi-file-size
                                               size-change) t)
@@ -849,8 +863,7 @@ Save anyway? ")))
   "Read `vlfi-batch-size' bytes from READ-POS and write them \
 back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
   (erase-buffer)
-  (or (verify-visited-file-modtime (current-buffer))
-      (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
+  (vlfi-verify-size)
   (let ((read-end (+ read-pos vlfi-batch-size)))
     (insert-file-contents-literally buffer-file-name nil
                                     read-pos
@@ -884,8 +897,7 @@ Done by saving content up front and then writing previous batch."
 Then write initial buffer content to file at WRITE-POS.
 If HIDE-READ is non nil, temporarily hide literal read content.
 Return nil if EOF is reached, t otherwise."
-  (or (verify-visited-file-modtime (current-buffer))
-      (setq vlfi-file-size (vlfi-get-file-size buffer-file-name)))
+  (vlfi-verify-size)
   (let ((read-more (< read-pos vlfi-file-size))
         (start-write-pos (point-min))
         (end-write-pos (point-max)))
