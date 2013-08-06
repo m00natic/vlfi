@@ -92,7 +92,8 @@
   (make-local-variable 'vlfi-batch-size)
   (make-local-variable 'vlfi-start-pos)
   (make-local-variable 'vlfi-end-pos)
-  (make-local-variable 'vlfi-file-size))
+  (make-local-variable 'vlfi-file-size)
+  (make-local-variable 'vlfi-encode-size))
 
 ;;;###autoload
 (defun vlfi (file)
