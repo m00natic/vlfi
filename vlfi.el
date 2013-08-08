@@ -53,7 +53,6 @@
   "Absolute position of the visible chunk start.")
 (defvar vlfi-end-pos 0 "Absolute position of the visible chunk end.")
 (defvar vlfi-file-size 0 "Total size of presented file.")
-(defvar vlfi-encode-size 0 "Size in bytes of current batch decoded.")
 
 (defvar vlfi-mode-map
   (let ((map (make-sparse-keymap)))
@@ -79,7 +78,6 @@
 (put 'vlfi-start-pos 'permanent-local t)
 (put 'vlfi-end-pos 'permanent-local t)
 (put 'vlfi-file-size 'permanent-local t)
-(put 'vlfi-encode-size 'permanent-local t)
 
 (define-derived-mode vlfi-mode special-mode "VLFI"
   "Mode to browse large files in."
@@ -92,8 +90,7 @@
   (make-local-variable 'vlfi-batch-size)
   (make-local-variable 'vlfi-start-pos)
   (make-local-variable 'vlfi-end-pos)
-  (make-local-variable 'vlfi-file-size)
-  (make-local-variable 'vlfi-encode-size))
+  (make-local-variable 'vlfi-file-size))
 
 ;;;###autoload
 (defun vlfi (file)
@@ -799,12 +796,10 @@ If changing size of chunk, shift remaining file content."
                  (y-or-n-p "File has changed since visited or saved.  \
 Save anyway? ")))
     (let ((pos (point))
-          (size-change (- vlfi-encode-size
-                          (setq vlfi-encode-size
-                                (length (encode-coding-region
-                                         (point-min) (point-max)
-                                         buffer-file-coding-system
-                                         t))))))
+          (size-change (- vlfi-end-pos vlfi-start-pos
+                          (length (encode-coding-region
+                                   (point-min) (point-max)
+                                   buffer-file-coding-system t)))))
       (cond ((zerop size-change)
              (write-region nil nil buffer-file-name vlfi-start-pos t))
             ((< 0 size-change)
