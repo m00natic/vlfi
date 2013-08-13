@@ -174,6 +174,7 @@ OP-TYPE specifies the file operation being performed over FILENAME."
     ad-do-it))
 
 ;; non-recent Emacs
+;;;###autoload
 (unless (fboundp 'file-size-human-readable)
   (defun file-size-human-readable (file-size)
     "Print FILE-SIZE in MB."
