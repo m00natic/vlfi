@@ -299,12 +299,14 @@ When given MINIMAL flag, skip non important operations."
   "Move to chunk determined by START END.
 When given MINIMAL flag, skip non important operations."
   (vlfi-verify-size)
-  (and (vlfi-move-to-chunk-1 start end)
-       (not minimal)
-       (vlfi-update-buffer-name)))
+  (if (buffer-modified-p)
+      (if (vlfi-move-to-chunk-1 start end)
+          (or minimal (vlfi-update-buffer-name)))
+    (vlfi-move-to-chunk-2 start end)
+    (or minimal (vlfi-update-buffer-name))))
 
 (defun vlfi-move-to-chunk-1 (start end)
-  "Move to chunk determined by START END keeping as much changes.
+  "Move to chunk determined by START END keeping as much edits.
 Return t if move hasn't been canceled."
   (let ((modified (buffer-modified-p))
         (start (max 0 start))
@@ -328,8 +330,9 @@ Return t if move hasn't been canceled."
             (shift-end 0)
             (inhibit-read-only t))
         (cond ((< end edit-end)
-               (delete-region (byte-to-position (- end
-                                                   vlfi-start-pos))
+               (delete-region (byte-to-position (1+
+                                                 (- end
+                                                    vlfi-start-pos)))
                               (point-max)))
               ((< edit-end end)
                (let ((edit-end-pos (point-max)))
@@ -337,7 +340,7 @@ Return t if move hasn't been canceled."
                  (insert-file-contents buffer-file-name nil
                                        vlfi-end-pos end)
                  (setq shift-end (cdr (vlfi-adjust-chunk
-                                       vlfi-end-pos end
+                                       vlfi-end-pos end nil t
                                        edit-end-pos))))))
         (cond ((< vlfi-start-pos start)
                (delete-region (point-min) (byte-to-position
@@ -350,12 +353,13 @@ Return t if move hasn't been canceled."
                  (setq shift-start (car
                                     (vlfi-adjust-chunk start
                                                        vlfi-start-pos
+                                                       t nil
                                                        edit-end-pos)))
                  (goto-char (point-min))
                  (insert (delete-and-extract-region edit-end-pos
                                                     (point-max))))))
         (setq vlfi-start-pos (- start shift-start)
-              vlfi-end-pos (- end shift-end))
+              vlfi-end-pos (+ end shift-end))
         (goto-char (or (byte-to-position (- pos vlfi-start-pos))
                        (point-max))))
       (set-buffer-modified-p modified)
@@ -370,41 +374,58 @@ Return t if move hasn't been canceled."
     (erase-buffer)
     (insert-file-contents buffer-file-name nil
                           vlfi-start-pos vlfi-end-pos)
-    (let ((shifts (vlfi-adjust-chunk vlfi-start-pos vlfi-end-pos)))
+    (let ((shifts (vlfi-adjust-chunk vlfi-start-pos vlfi-end-pos t
+                                     t)))
       (setq vlfi-start-pos (- vlfi-start-pos (car shifts))
-            vlfi-end-pos (- vlfi-end-pos (cdr shifts)))
+            vlfi-end-pos (+ vlfi-end-pos (cdr shifts)))
       (goto-char (or (byte-to-position (+ pos (car shifts)))
                      (point-max)))))
   (set-buffer-modified-p nil)
   (set-visited-file-modtime))
 
-(defun vlfi-adjust-chunk (start end &optional position)
-  "Adjust chunk at absolute START till END until content can be \
-properly decoded.  Use buffer POSITION as start if given.
+(defun vlfi-adjust-chunk (start end &optional adjust-start adjust-end
+                                position)
+  "Adjust chunk at absolute START to END till content can be \
+properly decoded.  ADJUST-START determines if trying to prepend bytes\
+ to the beginning, ADJUST-END - add to the end.
+Use buffer POSITION as start if given.
 Return number of bytes moved back for proper decoding and number of
-bytes striped from the end character."
+bytes added to the end."
   (let ((position (or position (point-min)))
         (shift-start 0)
         (shift-end 0)
         (chunk-size (- end start)))
-    (while (and (not (zerop start))
-                (< shift-start 4)
-                (< 4 (abs (- chunk-size
-                             (length (encode-coding-region
-                                      position (point-max)
-                                      buffer-file-coding-system
-                                      t))))))
-      (setq shift-start (1+ shift-start)
-            start (1- start)
-            chunk-size (1+ chunk-size))
-      (delete-region position (point-max))
-      (goto-char position)
-      (insert-file-contents buffer-file-name nil start end))
-    (if (< end vlfi-file-size)
-        (let ((point-max (point-max)))
-          (setq shift-end (- (position-bytes point-max)
-                             (position-bytes (1- point-max))))
-          (delete-region (1- point-max) point-max))) ;delete last character, may be incomplete
+    ;; adjust beginning
+    (if adjust-start
+        (while (and (not (zerop start))
+                    (< shift-start 4)
+                    (< 4 (abs (- chunk-size
+                                 (length (encode-coding-region
+                                          position (point-max)
+                                          buffer-file-coding-system
+                                          t))))))
+          (setq shift-start (1+ shift-start)
+                start (1- start)
+                chunk-size (1+ chunk-size))
+          (delete-region position (point-max))
+          (goto-char position)
+          (insert-file-contents buffer-file-name nil start end)))
+    ;; adjust end
+    (when (and adjust-end (< end vlfi-file-size))
+      (let ((expected-size (buffer-size)))
+        (while (and (= expected-size (buffer-size))
+                    (< end vlfi-file-size))
+          (setq shift-end (1+ shift-end)
+                end (1+ end))
+          (delete-region position (point-max))
+          (goto-char position)
+          (insert-file-contents buffer-file-name nil start end)))
+      (when (< end vlfi-file-size)
+        (setq shift-end (1- shift-end)
+              end (1- end))
+        (delete-region position (point-max))
+        (goto-char position)
+        (insert-file-contents buffer-file-name nil start end)))
     (cons shift-start shift-end)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -805,7 +826,7 @@ Save anyway? ")))
             ((< 0 size-change)
              (vlfi-file-shift-back size-change))
             (t (vlfi-file-shift-forward (- size-change))))
-      (vlfi-move-to-chunk vlfi-start-pos vlfi-end-pos)
+      (vlfi-move-to-chunk-2 vlfi-start-pos vlfi-end-pos)
       (goto-char pos))
     (vlfi-mode))
   t)
