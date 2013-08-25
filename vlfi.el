@@ -36,6 +36,6 @@
 
 ;;;###autoload
 (error
- "This package has been merged with vlf: please install that instead")
+ "vlfi package has been merged with vlf: please install that instead")
 
 ;;; vlfi.el ends here
