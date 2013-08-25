@@ -196,8 +196,7 @@ with the prefix argument DECREASE it is halved."
   (format "%s(%s)[%d/%d](%d)"
           (file-name-nondirectory buffer-file-name)
           (file-size-human-readable vlf-file-size)
-          (/ (+ vlf-start-pos (/ (- vlf-end-pos vlf-start-pos) 2))
-             vlf-batch-size)
+          (/ vlf-end-pos vlf-batch-size)
           (/ vlf-file-size vlf-batch-size)
           vlf-batch-size))
 
@@ -242,7 +241,7 @@ Ask for confirmation if NOCONFIRM is nil."
   (if (or noconfirm
           (yes-or-no-p (format "Revert buffer from file %s? "
                                buffer-file-name)))
-      (vlf-move-to-chunk vlf-start-pos vlf-end-pos)))
+      (vlf-move-to-chunk-2 vlf-start-pos vlf-end-pos)))
 
 (defun vlf-jump-to-chunk (n)
   "Go to to chunk N."
@@ -300,16 +299,19 @@ When given MINIMAL flag, skip non important operations."
 
 (defun vlf-move-to-chunk (start end &optional minimal)
   "Move to chunk determined by START END.
-When given MINIMAL flag, skip non important operations."
-  (vlf-verify-size)
-  (if (buffer-modified-p)
-      (if (vlf-move-to-chunk-1 start end)
-          (or minimal (vlf-update-buffer-name)))
-    (vlf-move-to-chunk-2 start end)
-    (or minimal (vlf-update-buffer-name))))
+When given MINIMAL flag, skip non important operations.
+If same as current chunk is requested, do nothing."
+  (unless (and (= start vlf-start-pos)
+               (= end vlf-end-pos))
+    (vlf-verify-size)
+    (if (buffer-modified-p)
+        (if (vlf-move-to-chunk-1 start end)
+            (or minimal (vlf-update-buffer-name)))
+      (vlf-move-to-chunk-2 start end)
+      (or minimal (vlf-update-buffer-name)))))
 
 (defun vlf-move-to-chunk-1 (start end)
-  "Move to chunk determined by START END keeping as much edits.
+  "Move to chunk determined by START END keeping as much edits if any.
 Return t if move hasn't been canceled."
   (let ((modified (buffer-modified-p))
         (start (max 0 start))
@@ -369,7 +371,7 @@ Return t if move hasn't been canceled."
       t))))
 
 (defun vlf-move-to-chunk-2 (start end)
-  "Move to chunk determined by START END."
+  "Unconditionally move to chunk determined by START END."
   (setq vlf-start-pos (max 0 start)
         vlf-end-pos (min end vlf-file-size))
   (let ((inhibit-read-only t)
