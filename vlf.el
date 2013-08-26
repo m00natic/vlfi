@@ -439,7 +439,8 @@ bytes added to the end."
 (defun vlf-re-search (regexp count backward batch-step)
   "Search for REGEXP COUNT number of times forward or BACKWARD.
 BATCH-STEP is amount of overlap between successive chunks."
-  (assert (< 0 count))
+  (if (<= count 0)
+      (error "Count must be positive"))
   (let* ((match-chunk-start vlf-start-pos)
          (match-chunk-end vlf-end-pos)
          (match-start-pos (+ vlf-start-pos (position-bytes (point))))
