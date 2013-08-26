@@ -451,6 +451,8 @@ BATCH-STEP is amount of overlap between successive chunks."
                         (- vlf-file-size vlf-end-pos)
                       vlf-start-pos)
                     vlf-file-size)))
+    (set-buffer-modified-p nil)
+    (buffer-disable-undo)
     (unwind-protect
         (catch 'end-of-file
           (if backward
@@ -511,6 +513,7 @@ BATCH-STEP is amount of overlap between successive chunks."
                        (progress-reporter-update reporter
                                                  vlf-end-pos)))))
           (progress-reporter-done reporter))
+      (set-buffer-modified-p nil)
       (if backward
           (vlf-goto-match match-chunk-start match-chunk-end
                            match-end-pos match-start-pos
@@ -550,8 +553,8 @@ successful.  Return nil if nothing found."
           (goto-char match-end)
           (message "Moved to the %d match which is last"
                    (- count to-find)))
-        (sit-for 0.1)
-        (delete-overlay overlay)
+        (unwind-protect (sit-for 5)
+          (delete-overlay overlay))
         t))))
 
 (defun vlf-re-search-forward (regexp count)
@@ -677,7 +680,10 @@ Prematurely ending indexing will still show what's found so far."
         (pos (point)))
     (vlf-beginning-of-file)
     (goto-char (point-min))
+    (set-buffer-modified-p nil)
+    (buffer-disable-undo)
     (unwind-protect (vlf-build-occur regexp)
+      (set-buffer-modified-p nil)
       (vlf-move-to-chunk start-pos end-pos)
       (goto-char pos))))
 
