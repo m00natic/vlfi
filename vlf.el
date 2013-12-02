@@ -61,9 +61,10 @@
 (put 'vlf-file-size 'permanent-local t)
 
 (defvar vlf-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map [M-next] 'vlf-next-batch)
-    (define-key map [M-prior] 'vlf-prev-batch)
+  (let ((map (make-sparse-keymap))
+        (map-prefix (make-sparse-keymap)))
+    (define-key map [next] 'vlf-next-batch)
+    (define-key map [prior] 'vlf-prev-batch)
     (define-key map "+" 'vlf-change-batch-size)
     (define-key map "-"
       (lambda () "Decrease vlf batch size by factor of 2."
@@ -74,37 +75,56 @@
     (define-key map "o" 'vlf-occur)
     (define-key map "[" 'vlf-beginning-of-file)
     (define-key map "]" 'vlf-end-of-file)
-    (define-key map "e" 'vlf-edit-mode)
     (define-key map "j" 'vlf-jump-to-chunk)
     (define-key map "l" 'vlf-goto-line)
-    map)
+    (define-key map "q" 'vlf-discard-edit)
+    (define-key map-prefix "\C-c\C-v" map)
+    map-prefix)
   "Keymap for `vlf-mode'.")
 
-(define-derived-mode vlf-mode special-mode "VLF"
+(define-minor-mode vlf-mode
   "Mode to browse large files in."
-  (setq buffer-read-only t)
-  (set-buffer-modified-p nil)
-  (buffer-disable-undo)
-  (add-hook 'write-file-functions 'vlf-write nil t)
-  (make-local-variable 'revert-buffer-function)
-  (setq revert-buffer-function 'vlf-revert)
-  (make-local-variable 'vlf-batch-size)
-  (make-local-variable 'vlf-start-pos)
-  (make-local-variable 'vlf-end-pos)
-  (make-local-variable 'vlf-file-size))
+  :lighter " VLF"
+  :group 'vlf-mode
+  :keymap vlf-mode-map
+  (if vlf-mode
+      (progn
+        (add-hook 'write-file-functions 'vlf-write nil t)
+        (set (make-local-variable 'revert-buffer-function)
+             'vlf-revert)
+        (make-local-variable 'vlf-batch-size)
+        (set (make-local-variable 'vlf-start-pos) -1)
+        (make-local-variable 'vlf-end-pos)
+        (set (make-local-variable 'vlf-file-size)
+             (vlf-get-file-size buffer-file-name))
+        (let* ((pos (position-bytes (point)))
+               (start (* (/ pos vlf-batch-size) vlf-batch-size)))
+          (goto-char (byte-to-position (- pos start)))
+          (vlf-move-to-batch start)))
+    (when (or (not large-file-warning-threshold)
+              (< vlf-file-size large-file-warning-threshold)
+              (y-or-n-p (format "Load whole file? (%s) "
+                                (file-size-human-readable
+                                 vlf-file-size))))
+      (remove-hook 'write-file-functions 'vlf-write t)
+      (kill-local-variable 'revert-buffer-function)
+      (let ((pos (+ vlf-start-pos (position-bytes (point)))))
+        (erase-buffer)
+        (insert-file-contents buffer-file-name)
+        (set-buffer-modified-p nil)
+        (goto-char (byte-to-position pos)))
+      (rename-buffer (file-name-nondirectory buffer-file-name) t))))
 
 ;;;###autoload
 (defun vlf (file)
-  "View Large FILE.
-Batches of the file data from FILE will be displayed in a read-only
-buffer.  You can customize number of bytes displayed by customizing
+  "View Large FILE in batches.
+You can customize number of bytes displayed by customizing
 `vlf-batch-size'."
   (interactive "fFile to open: ")
   (with-current-buffer (generate-new-buffer "*vlf*")
     (set-visited-file-name file)
-    (vlf-mode)
-    (setq vlf-file-size (vlf-get-file-size buffer-file-name))
-    (vlf-insert-file)
+    (set-buffer-modified-p nil)
+    (vlf-mode 1)
     (switch-to-buffer (current-buffer))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -156,8 +176,7 @@ OP-TYPE specifies the file operation being performed over FILENAME."
 (defadvice scroll-up (around vlf-scroll-up
                              activate compile)
   "Slide to next batch if at end of buffer in `vlf-mode'."
-  (if (and (derived-mode-p 'vlf-mode)
-           (eobp))
+  (if (and vlf-mode (eobp))
       (progn (vlf-next-batch 1)
              (goto-char (point-min)))
     ad-do-it))
@@ -165,8 +184,7 @@ OP-TYPE specifies the file operation being performed over FILENAME."
 (defadvice scroll-down (around vlf-scroll-down
                                activate compile)
   "Slide to previous batch if at beginning of buffer  in `vlf-mode'."
-  (if (and (derived-mode-p 'vlf-mode)
-           (bobp))
+  (if (and vlf-mode (bobp))
       (progn (vlf-prev-batch 1)
              (goto-char (point-max)))
     ad-do-it))
@@ -187,22 +205,26 @@ Normally, the value is doubled;
 with the prefix argument DECREASE it is halved."
   (interactive "P")
   (setq vlf-batch-size (if decrease
-                            (/ vlf-batch-size 2)
-                          (* vlf-batch-size 2)))
+                           (/ vlf-batch-size 2)
+                         (* vlf-batch-size 2)))
   (vlf-move-to-batch vlf-start-pos))
 
 (defun vlf-format-buffer-name ()
   "Return format for vlf buffer name."
-  (format "%s(%s)[%d/%d](%d)"
+  (format "%s[%d/%d]"
           (file-name-nondirectory buffer-file-name)
-          (file-size-human-readable vlf-file-size)
           (/ vlf-end-pos vlf-batch-size)
-          (/ vlf-file-size vlf-batch-size)
-          vlf-batch-size))
+          (/ vlf-file-size vlf-batch-size)))
 
 (defun vlf-update-buffer-name ()
-  "Update the current buffer name."
-  (rename-buffer (vlf-format-buffer-name) t))
+  "Update the current buffer name and modeline."
+  (rename-buffer (vlf-format-buffer-name) t)
+  (setq minor-mode-alist
+        (mapcar (lambda (x)
+                  (if (eq 'vlf-mode (car x))
+                      `(vlf-mode ,(format " VLF[%d]" vlf-batch-size))
+                    x))
+                minor-mode-alist)))
 
 (defun vlf-get-file-size (file)
   "Get size in bytes of FILE."
@@ -248,6 +270,13 @@ Ask for confirmation if NOCONFIRM is nil."
   (interactive "nGoto to chunk: ")
   (vlf-move-to-batch (* (1- n) vlf-batch-size)))
 
+(defmacro vlf-with-undo-disabled (&rest body)
+  "Execute BODY with temporarily disabled undo."
+  (declare (indent defun))
+  `(progn (buffer-disable-undo)
+          (unwind-protect (progn ,@body)
+            (buffer-enable-undo))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; batch movement
 
@@ -260,7 +289,7 @@ When prefix argument is negative
   (interactive "p")
   (vlf-verify-size)
   (let* ((end (min (+ vlf-end-pos (* vlf-batch-size
-                                      (abs append)))
+                                     (abs append)))
                    vlf-file-size))
          (start (if (< append 0)
                     vlf-start-pos
@@ -277,7 +306,7 @@ When prefix argument is negative
   (if (zerop vlf-start-pos)
       (error "Already at BOF"))
   (let* ((start (max 0 (- vlf-start-pos (* vlf-batch-size
-                                            (abs prepend)))))
+                                           (abs prepend)))))
          (end (if (< prepend 0)
                   vlf-end-pos
                 (+ start vlf-batch-size))))
@@ -313,83 +342,85 @@ If same as current chunk is requested, do nothing."
 (defun vlf-move-to-chunk-1 (start end)
   "Move to chunk determined by START END keeping as much edits if any.
 Return t if move hasn't been canceled."
-  (let ((modified (buffer-modified-p))
-        (start (max 0 start))
-        (end (min end vlf-file-size))
-        (edit-end (+ (position-bytes (point-max)) vlf-start-pos)))
-    (cond
-     ((and (= start vlf-start-pos) (= end edit-end))
-      (unless modified
-        (vlf-move-to-chunk-2 start end)
-        t))
-     ((or (<= edit-end start) (<= end vlf-start-pos))
-      (when (or (not modified)
-                (y-or-n-p "Buffer modified, are you sure? ")) ; full chunk renewal
-        (vlf-move-to-chunk-2 start end)
-        t))
-     ((or (and (<= start vlf-start-pos) (<= edit-end end))
-          (not modified)
-          (y-or-n-p "Buffer modified, are you sure? "))
-      (let ((pos (+ (position-bytes (point)) vlf-start-pos))
-            (shift-start 0)
-            (shift-end 0)
-            (inhibit-read-only t))
-        (cond ((< end edit-end)
-               (delete-region (byte-to-position (1+
-                                                 (- end
-                                                    vlf-start-pos)))
-                              (point-max)))
-              ((< edit-end end)
-               (let ((edit-end-pos (point-max)))
-                 (goto-char edit-end-pos)
-                 (insert-file-contents buffer-file-name nil
-                                       vlf-end-pos end)
-                 (setq shift-end (cdr (vlf-adjust-chunk
-                                       vlf-end-pos end nil t
-                                       edit-end-pos))))))
-        (cond ((< vlf-start-pos start)
-               (delete-region (point-min) (byte-to-position
-                                           (- start vlf-start-pos))))
-              ((< start vlf-start-pos)
-               (let ((edit-end-pos (point-max)))
-                 (goto-char edit-end-pos)
-                 (insert-file-contents buffer-file-name nil
-                                       start vlf-start-pos)
-                 (setq shift-start (car
-                                    (vlf-adjust-chunk start
+  (vlf-with-undo-disabled
+   (let ((modified (buffer-modified-p))
+         (start (max 0 start))
+         (end (min end vlf-file-size))
+         (edit-end (+ (position-bytes (point-max)) vlf-start-pos)))
+     (cond
+      ((and (= start vlf-start-pos) (= end edit-end))
+       (unless modified
+         (vlf-move-to-chunk-2 start end)
+         t))
+      ((or (<= edit-end start) (<= end vlf-start-pos))
+       (when (or (not modified)
+                 (y-or-n-p "Buffer modified, are you sure? ")) ;full chunk renewal
+         (vlf-move-to-chunk-2 start end)
+         t))
+      ((or (and (<= start vlf-start-pos) (<= edit-end end))
+           (not modified)
+           (y-or-n-p "Buffer modified, are you sure? "))
+       (let ((pos (+ (position-bytes (point)) vlf-start-pos))
+             (shift-start 0)
+             (shift-end 0)
+             (inhibit-read-only t))
+         (cond ((< end edit-end)
+                (delete-region (byte-to-position (1+
+                                                  (- end
+                                                     vlf-start-pos)))
+                               (point-max)))
+               ((< edit-end end)
+                (let ((edit-end-pos (point-max)))
+                  (goto-char edit-end-pos)
+                  (insert-file-contents buffer-file-name nil
+                                        vlf-end-pos end)
+                  (setq shift-end (cdr (vlf-adjust-chunk
+                                        vlf-end-pos end nil t
+                                        edit-end-pos))))))
+         (cond ((< vlf-start-pos start)
+                (delete-region (point-min) (byte-to-position
+                                            (- start vlf-start-pos))))
+               ((< start vlf-start-pos)
+                (let ((edit-end-pos (point-max)))
+                  (goto-char edit-end-pos)
+                  (insert-file-contents buffer-file-name nil
+                                        start vlf-start-pos)
+                  (setq shift-start (car
+                                     (vlf-adjust-chunk start
                                                        vlf-start-pos
                                                        t nil
                                                        edit-end-pos)))
-                 (goto-char (point-min))
-                 (insert (delete-and-extract-region edit-end-pos
-                                                    (point-max))))))
-        (setq vlf-start-pos (- start shift-start)
-              vlf-end-pos (+ end shift-end))
-        (goto-char (or (byte-to-position (- pos vlf-start-pos))
-                       (point-max))))
-      (set-buffer-modified-p modified)
-      t))))
+                  (goto-char (point-min))
+                  (insert (delete-and-extract-region edit-end-pos
+                                                     (point-max))))))
+         (setq vlf-start-pos (- start shift-start)
+               vlf-end-pos (+ end shift-end))
+         (goto-char (or (byte-to-position (- pos vlf-start-pos))
+                        (point-max))))
+       (set-buffer-modified-p modified)
+       t)))))
 
 (defun vlf-move-to-chunk-2 (start end)
   "Unconditionally move to chunk determined by START END."
-  (setq vlf-start-pos (max 0 start)
-        vlf-end-pos (min end vlf-file-size))
-  (let ((inhibit-read-only t)
-        (pos (position-bytes (point))))
-    (erase-buffer)
-    (insert-file-contents buffer-file-name nil
-                          vlf-start-pos vlf-end-pos)
-    (let ((shifts (vlf-adjust-chunk vlf-start-pos vlf-end-pos t
-                                     t)))
-      (setq vlf-start-pos (- vlf-start-pos (car shifts))
-            vlf-end-pos (+ vlf-end-pos (cdr shifts)))
-      (goto-char (or (byte-to-position (+ pos (car shifts)))
-                     (point-max)))))
-  (set-buffer-modified-p nil)
-  (set-visited-file-modtime))
+  (vlf-with-undo-disabled
+    (setq vlf-start-pos (max 0 start)
+          vlf-end-pos (min end vlf-file-size))
+    (let ((inhibit-read-only t)
+          (pos (position-bytes (point))))
+      (erase-buffer)
+      (insert-file-contents buffer-file-name nil
+                            vlf-start-pos vlf-end-pos)
+      (let ((shifts (vlf-adjust-chunk vlf-start-pos vlf-end-pos t
+                                      t)))
+        (setq vlf-start-pos (- vlf-start-pos (car shifts))
+              vlf-end-pos (+ vlf-end-pos (cdr shifts)))
+        (goto-char (or (byte-to-position (+ pos (car shifts)))
+                       (point-max)))))
+    (set-buffer-modified-p nil)
+    (set-visited-file-modtime)))
 
 (defun vlf-adjust-chunk (start end &optional adjust-start adjust-end
-                                position)
+                               position)
   "Adjust chunk at absolute START to END till content can be \
 properly decoded.  ADJUST-START determines if trying to prepend bytes\
  to the beginning, ADJUST-END - add to the end.
@@ -453,80 +484,80 @@ BATCH-STEP is amount of overlap between successive chunks."
                       vlf-start-pos)
                     vlf-file-size)))
     (set-buffer-modified-p nil)
-    (buffer-disable-undo)
-    (unwind-protect
-        (catch 'end-of-file
-          (if backward
-              (while (not (zerop to-find))
-                (cond ((re-search-backward regexp nil t)
-                       (setq to-find (1- to-find)
-                             match-chunk-start vlf-start-pos
-                             match-chunk-end vlf-end-pos
-                             match-start-pos (+ vlf-start-pos
-                                                (position-bytes
-                                                 (match-beginning 0)))
-                             match-end-pos (+ vlf-start-pos
-                                              (position-bytes
-                                               (match-end 0)))))
-                      ((zerop vlf-start-pos)
-                       (throw 'end-of-file nil))
-                      (t (let ((batch-move (- vlf-start-pos
-                                              (- vlf-batch-size
-                                                 batch-step))))
-                           (vlf-move-to-batch
-                            (if (< match-start-pos batch-move)
-                                (- match-start-pos vlf-batch-size)
-                              batch-move) t))
-                         (goto-char (if (< match-start-pos
-                                           vlf-end-pos)
-                                        (or (byte-to-position
-                                             (- match-start-pos
-                                                vlf-start-pos))
-                                            (point-max))
-                                      (point-max)))
-                         (progress-reporter-update
-                          reporter (- vlf-file-size
-                                      vlf-start-pos)))))
-            (while (not (zerop to-find))
-              (cond ((re-search-forward regexp nil t)
-                     (setq to-find (1- to-find)
-                           match-chunk-start vlf-start-pos
-                           match-chunk-end vlf-end-pos
-                           match-start-pos (+ vlf-start-pos
-                                              (position-bytes
-                                               (match-beginning 0)))
-                           match-end-pos (+ vlf-start-pos
-                                            (position-bytes
-                                             (match-end 0)))))
-                    ((= vlf-end-pos vlf-file-size)
-                     (throw 'end-of-file nil))
-                    (t (let ((batch-move (- vlf-end-pos batch-step)))
-                         (vlf-move-to-batch
-                          (if (< batch-move match-end-pos)
-                              match-end-pos
-                            batch-move) t))
-                       (goto-char (if (< vlf-start-pos match-end-pos)
-                                      (or (byte-to-position
-                                           (- match-end-pos
-                                              vlf-start-pos))
-                                          (point-min))
-                                    (point-min)))
-                       (progress-reporter-update reporter
-                                                 vlf-end-pos)))))
-          (progress-reporter-done reporter))
-      (set-buffer-modified-p nil)
-      (if backward
-          (vlf-goto-match match-chunk-start match-chunk-end
+    (vlf-with-undo-disabled
+     (unwind-protect
+         (catch 'end-of-file
+           (if backward
+               (while (not (zerop to-find))
+                 (cond ((re-search-backward regexp nil t)
+                        (setq to-find (1- to-find)
+                              match-chunk-start vlf-start-pos
+                              match-chunk-end vlf-end-pos
+                              match-start-pos (+ vlf-start-pos
+                                                 (position-bytes
+                                                  (match-beginning 0)))
+                              match-end-pos (+ vlf-start-pos
+                                               (position-bytes
+                                                (match-end 0)))))
+                       ((zerop vlf-start-pos)
+                        (throw 'end-of-file nil))
+                       (t (let ((batch-move (- vlf-start-pos
+                                               (- vlf-batch-size
+                                                  batch-step))))
+                            (vlf-move-to-batch
+                             (if (< match-start-pos batch-move)
+                                 (- match-start-pos vlf-batch-size)
+                               batch-move) t))
+                          (goto-char (if (< match-start-pos
+                                            vlf-end-pos)
+                                         (or (byte-to-position
+                                              (- match-start-pos
+                                                 vlf-start-pos))
+                                             (point-max))
+                                       (point-max)))
+                          (progress-reporter-update
+                           reporter (- vlf-file-size
+                                       vlf-start-pos)))))
+             (while (not (zerop to-find))
+               (cond ((re-search-forward regexp nil t)
+                      (setq to-find (1- to-find)
+                            match-chunk-start vlf-start-pos
+                            match-chunk-end vlf-end-pos
+                            match-start-pos (+ vlf-start-pos
+                                               (position-bytes
+                                                (match-beginning 0)))
+                            match-end-pos (+ vlf-start-pos
+                                             (position-bytes
+                                              (match-end 0)))))
+                     ((= vlf-end-pos vlf-file-size)
+                      (throw 'end-of-file nil))
+                     (t (let ((batch-move (- vlf-end-pos batch-step)))
+                          (vlf-move-to-batch
+                           (if (< batch-move match-end-pos)
+                               match-end-pos
+                             batch-move) t))
+                        (goto-char (if (< vlf-start-pos match-end-pos)
+                                       (or (byte-to-position
+                                            (- match-end-pos
+                                               vlf-start-pos))
+                                           (point-min))
+                                     (point-min)))
+                        (progress-reporter-update reporter
+                                                  vlf-end-pos)))))
+           (progress-reporter-done reporter))
+       (set-buffer-modified-p nil)
+       (if backward
+           (vlf-goto-match match-chunk-start match-chunk-end
                            match-end-pos match-start-pos
                            count to-find)
-        (vlf-goto-match match-chunk-start match-chunk-end
+         (vlf-goto-match match-chunk-start match-chunk-end
                          match-start-pos match-end-pos
-                         count to-find)))))
+                         count to-find))))))
 
 (defun vlf-goto-match (match-chunk-start match-chunk-end
-                                          match-pos-start
-                                          match-pos-end
-                                          count to-find)
+                                         match-pos-start
+                                         match-pos-end
+                                         count to-find)
   "Move to MATCH-CHUNK-START MATCH-CHUNK-END surrounding \
 MATCH-POS-START and MATCH-POS-END.
 According to COUNT and left TO-FIND, show if search has been
@@ -588,7 +619,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
             (progn (vlf-beginning-of-file)
                    (goto-char (point-min))
                    (setq success (vlf-re-search "[\n\C-m]" (1- n)
-                                                 nil 0)))
+                                                nil 0)))
           (vlf-end-of-file)
           (goto-char (point-max))
           (setq success (vlf-re-search "[\n\C-m]" (- n) t 0)))
@@ -682,11 +713,11 @@ Prematurely ending indexing will still show what's found so far."
     (vlf-beginning-of-file)
     (goto-char (point-min))
     (set-buffer-modified-p nil)
-    (buffer-disable-undo)
-    (unwind-protect (vlf-build-occur regexp)
-      (set-buffer-modified-p nil)
-      (vlf-move-to-chunk start-pos end-pos)
-      (goto-char pos))))
+    (vlf-with-undo-disabled
+     (unwind-protect (vlf-build-occur regexp)
+       (set-buffer-modified-p nil)
+       (vlf-move-to-chunk start-pos end-pos)
+       (goto-char pos)))))
 
 (defun vlf-build-occur (regexp)
   "Build occur style index for REGEXP."
@@ -698,7 +729,7 @@ Prematurely ending indexing will still show what's found so far."
         (match-end-pos (+ vlf-start-pos (position-bytes (point))))
         (occur-buffer (generate-new-buffer
                        (concat "*VLF-occur " (file-name-nondirectory
-                                               buffer-file-name)
+                                              buffer-file-name)
                                "*")))
         (line-regexp (concat "\\(?5:[\n\C-m]\\)\\|\\(?10:"
                              regexp "\\)"))
@@ -762,8 +793,8 @@ Prematurely ending indexing will still show what's found so far."
               (unless end-of-file
                 (let ((batch-move (- vlf-end-pos batch-step)))
                   (vlf-move-to-batch (if (< batch-move match-end-pos)
-                                          match-end-pos
-                                        batch-move) t))
+                                         match-end-pos
+                                       batch-move) t))
                 (goto-char (if (< vlf-start-pos match-end-pos)
                                (or (byte-to-position (- match-end-pos
                                                         vlf-start-pos))
@@ -792,30 +823,11 @@ in file: %s" total-matches line regexp file)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; editing
 
-(defvar vlf-edit-mode-map
-  (let ((map (make-sparse-keymap)))
-    (set-keymap-parent map text-mode-map)
-    (define-key map "\C-c\C-c" 'vlf-write)
-    (define-key map "\C-c\C-q" 'vlf-discard-edit)
-    (define-key map "\C-v" vlf-mode-map)
-    map)
-  "Keymap for command `vlf-edit-mode'.")
-
-(define-derived-mode vlf-edit-mode vlf-mode "VLF[edit]"
-  "Major mode for editing large file chunks."
-  (setq buffer-read-only nil)
-  (buffer-enable-undo)
-  (message (substitute-command-keys
-            "Editing: Type \\[vlf-write] to write chunk \
-or \\[vlf-discard-edit] to discard changes.")))
-
 (defun vlf-discard-edit ()
   "Discard edit and refresh chunk from file."
   (interactive)
   (set-buffer-modified-p nil)
-  (vlf-move-to-chunk vlf-start-pos vlf-end-pos)
-  (vlf-mode)
-  (message "Switched to VLF mode."))
+  (vlf-move-to-chunk vlf-start-pos vlf-end-pos))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; saving
@@ -839,30 +851,29 @@ Save anyway? ")))
              (vlf-file-shift-back size-change))
             (t (vlf-file-shift-forward (- size-change))))
       (vlf-move-to-chunk-2 vlf-start-pos vlf-end-pos)
-      (goto-char pos))
-    (vlf-mode))
+      (goto-char pos)))
   t)
 
 (defun vlf-file-shift-back (size-change)
   "Shift file contents SIZE-CHANGE bytes back."
   (write-region nil nil buffer-file-name vlf-start-pos t)
-  (buffer-disable-undo)
-  (let ((read-start-pos vlf-end-pos)
-        (coding-system-for-write 'no-conversion)
-        (reporter (make-progress-reporter "Adjusting file content..."
-                                          vlf-end-pos
-                                          vlf-file-size)))
-    (while (vlf-shift-batch read-start-pos (- read-start-pos
+  (vlf-with-undo-disabled
+   (let ((read-start-pos vlf-end-pos)
+         (coding-system-for-write 'no-conversion)
+         (reporter (make-progress-reporter "Adjusting file content..."
+                                           vlf-end-pos
+                                           vlf-file-size)))
+     (while (vlf-shift-batch read-start-pos (- read-start-pos
                                                size-change))
-      (setq read-start-pos (+ read-start-pos vlf-batch-size))
-      (progress-reporter-update reporter read-start-pos))
-    ;; pad end with space
-    (erase-buffer)
-    (vlf-verify-size)
-    (insert-char 32 size-change)
-    (write-region nil nil buffer-file-name (- vlf-file-size
-                                              size-change) t)
-    (progress-reporter-done reporter)))
+       (setq read-start-pos (+ read-start-pos vlf-batch-size))
+       (progress-reporter-update reporter read-start-pos))
+     ;; pad end with space
+     (erase-buffer)
+     (vlf-verify-size)
+     (insert-char 32 size-change)
+     (write-region nil nil buffer-file-name (- vlf-file-size
+                                               size-change) t)
+     (progress-reporter-done reporter))))
 
 (defun vlf-shift-batch (read-pos write-pos)
   "Read `vlf-batch-size' bytes from READ-POS and write them \
@@ -879,26 +890,26 @@ back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
 (defun vlf-file-shift-forward (size-change)
   "Shift file contents SIZE-CHANGE bytes forward.
 Done by saving content up front and then writing previous batch."
-  (buffer-disable-undo)
-  (let ((size (+ vlf-batch-size size-change))
-        (read-pos vlf-end-pos)
-        (write-pos vlf-start-pos)
-        (reporter (make-progress-reporter "Adjusting file content..."
-                                          vlf-start-pos
-                                          vlf-file-size)))
-    (when (vlf-shift-batches size read-pos write-pos t)
-      (setq write-pos (+ read-pos size-change)
-            read-pos (+ read-pos size))
-      (progress-reporter-update reporter write-pos)
-      (let ((coding-system-for-write 'no-conversion))
-        (while (vlf-shift-batches size read-pos write-pos nil)
-          (setq write-pos (+ read-pos size-change)
-                read-pos (+ read-pos size))
-          (progress-reporter-update reporter write-pos))))
-    (progress-reporter-done reporter)))
+  (vlf-with-undo-disabled
+   (let ((read-size (max (/ vlf-batch-size 2) size-change))
+         (read-pos vlf-end-pos)
+         (write-pos vlf-start-pos)
+         (reporter (make-progress-reporter "Adjusting file content..."
+                                           vlf-start-pos
+                                           vlf-file-size)))
+     (when (vlf-shift-batches read-size read-pos write-pos t)
+       (setq write-pos (+ read-pos size-change)
+             read-pos (+ read-pos read-size))
+       (progress-reporter-update reporter write-pos)
+       (let ((coding-system-for-write 'no-conversion))
+         (while (vlf-shift-batches read-size read-pos write-pos nil)
+           (setq write-pos (+ read-pos size-change)
+                 read-pos (+ read-pos read-size))
+           (progress-reporter-update reporter write-pos))))
+     (progress-reporter-done reporter))))
 
-(defun vlf-shift-batches (size read-pos write-pos hide-read)
-  "Append SIZE bytes of file starting at READ-POS.
+(defun vlf-shift-batches (read-size read-pos write-pos hide-read)
+  "Append READ-SIZE bytes of file starting at READ-POS.
 Then write initial buffer content to file at WRITE-POS.
 If HIDE-READ is non nil, temporarily hide literal read content.
 Return nil if EOF is reached, t otherwise."
@@ -909,8 +920,8 @@ Return nil if EOF is reached, t otherwise."
     (when read-more
       (goto-char end-write-pos)
       (insert-file-contents-literally buffer-file-name nil read-pos
-                                      (min vlf-file-size (+ read-pos
-                                                             size))))
+                                      (min vlf-file-size
+                                           (+ read-pos read-size))))
     ;; write
     (if hide-read ; hide literal region if user has to choose encoding
         (narrow-to-region start-write-pos end-write-pos))
