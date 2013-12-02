@@ -101,13 +101,13 @@
                (start (* (/ pos vlf-batch-size) vlf-batch-size)))
           (goto-char (byte-to-position (- pos start)))
           (vlf-move-to-batch start)))
+    (kill-local-variable 'revert-buffer-function)
     (when (or (not large-file-warning-threshold)
               (< vlf-file-size large-file-warning-threshold)
               (y-or-n-p (format "Load whole file? (%s) "
                                 (file-size-human-readable
                                  vlf-file-size))))
       (remove-hook 'write-file-functions 'vlf-write t)
-      (kill-local-variable 'revert-buffer-function)
       (let ((pos (+ vlf-start-pos (position-bytes (point)))))
         (erase-buffer)
         (insert-file-contents buffer-file-name)
@@ -472,7 +472,8 @@ bytes added to the end."
 BATCH-STEP is amount of overlap between successive chunks."
   (if (<= count 0)
       (error "Count must be positive"))
-  (let* ((match-chunk-start vlf-start-pos)
+  (let* ((case-fold-search t)
+         (match-chunk-start vlf-start-pos)
          (match-chunk-end vlf-end-pos)
          (match-start-pos (+ vlf-start-pos (position-bytes (point))))
          (match-end-pos match-start-pos)
@@ -707,21 +708,32 @@ Prematurely ending indexing will still show what's found so far."
   (interactive (list (read-regexp "List lines matching regexp"
                                   (if regexp-history
                                       (car regexp-history)))))
-  (let ((start-pos vlf-start-pos)
-        (end-pos vlf-end-pos)
-        (pos (point)))
-    (vlf-beginning-of-file)
-    (goto-char (point-min))
-    (set-buffer-modified-p nil)
-    (vlf-with-undo-disabled
-     (unwind-protect (vlf-build-occur regexp)
-       (set-buffer-modified-p nil)
-       (vlf-move-to-chunk start-pos end-pos)
-       (goto-char pos)))))
+  (if (buffer-modified-p) ;use temporary buffer not to interfere with modifications 
+      (let ((vlf-buffer (current-buffer))
+            (file buffer-file-name)
+            (batch-size vlf-batch-size))
+        (with-temp-buffer
+          (setq buffer-file-name file)
+          (set-buffer-modified-p nil)
+          (set (make-local-variable 'vlf-batch-size) batch-size)
+          (vlf-mode 1)
+          (goto-char (point-min))
+          (vlf-with-undo-disabled
+           (vlf-build-occur regexp vlf-buffer))))
+    (let ((start-pos vlf-start-pos)
+          (end-pos vlf-end-pos)
+          (pos (point)))
+      (vlf-beginning-of-file)
+      (goto-char (point-min))
+      (vlf-with-undo-disabled
+       (unwind-protect (vlf-build-occur regexp (current-buffer))
+         (vlf-move-to-chunk start-pos end-pos)
+         (goto-char pos))))))
 
-(defun vlf-build-occur (regexp)
+(defun vlf-build-occur (regexp vlf-buffer)
   "Build occur style index for REGEXP."
-  (let ((line 1)
+  (let ((case-fold-search t)
+        (line 1)
         (last-match-line 0)
         (last-line-pos (point-min))
         (file buffer-file-name)
@@ -751,7 +763,6 @@ Prematurely ending indexing will still show what's found so far."
                             last-line-pos (point))
                     (let* ((chunk-start vlf-start-pos)
                            (chunk-end vlf-end-pos)
-                           (vlf-buffer (current-buffer))
                            (line-pos (line-beginning-position))
                            (line-text (buffer-substring
                                        line-pos (line-end-position))))
@@ -812,7 +823,7 @@ Prematurely ending indexing will still show what's found so far."
         (with-current-buffer occur-buffer
           (goto-char (point-min))
           (insert (propertize
-                   (format "%d matches from %d lines for \"%s\" \
+                   (format "%d matches in %d lines for \"%s\" \
 in file: %s" total-matches line regexp file)
                    'face 'underline))
           (set-buffer-modified-p nil)
