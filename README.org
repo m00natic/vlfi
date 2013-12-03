@@ -1,8 +1,8 @@
 * View Large Files
 
-An Emacs mode that allows viewing, editing and searching in large
-files in chunks.  Batch size can be adjusted on the fly and bounds the
-memory that is to be used for operations on the file.
+Emacs minor mode that allows viewing, editing and searching large
+files in batches.  Batch size can be adjusted on the fly and bounds
+the memory that is to be used for operations on the file.
 
 This is development version of the GNU ELPA [[http://elpa.gnu.org/packages/vlf][vlf.el]] package.  Here's
 what it does in a nutshell:
@@ -41,64 +41,56 @@ integer value), VLF will probably not quite work.
 
 *vlf-batch-size* bounds the memory used for all operations.
 
-** Special mode
-
-VLF is derived from special-mode and keeps all its properties.  For
-example you can directly press digits to enter prefix arguments.
-
-** Change major mode
-
-You can change major mode to whatever you like (for example
-hexl-mode).  Saving will insert contents as intended.  You can return
-to *vlf-mode* too.
-
 * Detail usage
 
 ** Control batch size
 
-*+* and *-* control current batch size by factors of 2.
+*C-c C-v +* and *C-c C-v -* control current batch size by factors
+of 2.
 
 You can also set by hand local variable *vlf-batch-size* and then
-refresh with *g*.
+refresh with *C-c C-v g*.
 
 ** Move around
 
-*M-PgUp* and *M-PgDn* move chunk by chunk.  With positive prefix
-argument they move prefix number of batches.  With negative - append
-prefix number of batches.
+*C-c C-v PgUp* and *C-c C-v PgDn* move batch by batch.  With positive
+prefix argument they move prefix number of batches.  With negative -
+append prefix number of batches.
 
-*[* and *]* take you to the beginning and end of file respectively.
+*C-c C-v [* and *C-c C-v ]* take you to the beginning and end of file
+respectively.
 
-*j* jumps to given chunk.  To see where you are in file and how many chunks
-there are (using the current batch size), look at the bracketed part
-of the buffer name, batch size is also there - at the end.
+*C-c C-v j* jumps to given chunk.  To see where you are in file and
+how many chunks there are (using the current batch size), look at the
+bracketed part of the buffer name, batch size is indicated in the
+mode-line.
 
 ** Search whole file
 
-*s* and *r* search forward and backward respectively over the whole
-file.  This is done chunk by chunk so if you have really huge file -
-you'd better set somewhat bigger batch size beforehand.
+*C-c C-v s* and *C-c C-v r* search forward and backward respectively
+over the whole file.  This is done batch by batch so if you have
+really huge file - you'd better set somewhat bigger batch size
+beforehand.
 
 ** Occur over whole file
 
-*o* builds index for given regular expression just like occur-mode.
-It does this chunk by chunk over the whole file.  Note that even if
-you prematurely stop it with *C-g*, it will still show index of what's
-found so far.
+*C-c C-v o* builds index for given regular expression just like M-x
+occur*.  It does this batch by batch over the whole file.  Note that
+even if you prematurely stop it with *C-g*, it will still show index
+of what's found so far.
 
 ** Jump to line
 
-*l* jumps to given line in file.  This is done by searching from the
-beginning, so again the bigger current batch size, the quicker.  With
-negative argument, lines are counted from the end of file.
+*C-c C-v l* jumps to given line in file.  This is done by searching
+from the beginning, so again the bigger current batch size, the
+quicker.  With negative argument, lines are counted from the end of
+file.
 
-** Edit
+** Edit and save
 
-*e* enters VLF in edit mode.  If editing doesn't change size of
-the chunk, only this chunk is saved.  Otherwise the remaining part of
-the file is adjusted chunk by chunk, so again you'd better have bigger
-current batch size.  If chunk has been expanded the memory used is
+If editing doesn't change size of the chunk, only this chunk is saved.
+Otherwise the remaining part of the file is adjusted batch by batch,
+so again you'd better have bigger current batch size.
 
-#+BEGIN_EXAMPLE
-(batch size + difference to the original chunk size) x 2
-#+END_EXAMPLE
+*Warning* Saving changes to non-ASCII chunks is a bit risky right
+now.
