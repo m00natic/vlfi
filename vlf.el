@@ -61,8 +61,8 @@
 (put 'vlf-file-size 'permanent-local t)
 
 (defvar vlf-mode-map
-  (let ((map (make-sparse-keymap))
-        (map-prefix (make-sparse-keymap)))
+  (let ((map-prefix (make-sparse-keymap))
+        (map (make-sparse-keymap)))
     (define-key map [next] 'vlf-next-batch)
     (define-key map [prior] 'vlf-prev-batch)
     (define-key map "+" 'vlf-change-batch-size)
@@ -85,7 +85,7 @@
 (define-minor-mode vlf-mode
   "Mode to browse large files in."
   :lighter " VLF"
-  :group 'vlf-mode
+  :group 'vlf
   :keymap vlf-mode-map
   (if vlf-mode
       (progn
@@ -104,7 +104,7 @@
     (kill-local-variable 'revert-buffer-function)
     (when (or (not large-file-warning-threshold)
               (< vlf-file-size large-file-warning-threshold)
-              (y-or-n-p (format "Load whole file? (%s) "
+              (y-or-n-p (format "Load whole file (%s)? "
                                 (file-size-human-readable
                                  vlf-file-size))))
       (remove-hook 'write-file-functions 'vlf-write t)
@@ -183,7 +183,7 @@ OP-TYPE specifies the file operation being performed over FILENAME."
 
 (defadvice scroll-down (around vlf-scroll-down
                                activate compile)
-  "Slide to previous batch if at beginning of buffer  in `vlf-mode'."
+  "Slide to previous batch if at beginning of buffer in `vlf-mode'."
   (if (and vlf-mode (bobp))
       (progn (vlf-prev-batch 1)
              (goto-char (point-max)))
@@ -211,7 +211,7 @@ with the prefix argument DECREASE it is halved."
 
 (defun vlf-format-buffer-name ()
   "Return format for vlf buffer name."
-  (format "%s[%d/%d]"
+  (format "%s(%d/%d)"
           (file-name-nondirectory buffer-file-name)
           (/ vlf-end-pos vlf-batch-size)
           (/ vlf-file-size vlf-batch-size)))
@@ -222,9 +222,11 @@ with the prefix argument DECREASE it is halved."
   (setq minor-mode-alist
         (mapcar (lambda (x)
                   (if (eq 'vlf-mode (car x))
-                      `(vlf-mode ,(format " VLF[%d]" vlf-batch-size))
+                      `(vlf-mode ,(format " VLF[%s]"
+                                          (file-size-human-readable
+                                           vlf-batch-size)))
                     x))
-                minor-mode-alist)))
+         minor-mode-alist)))
 
 (defun vlf-get-file-size (file)
   "Get size in bytes of FILE."
@@ -591,7 +593,7 @@ successful.  Return nil if nothing found."
           (goto-char match-end)
           (message "Moved to the %d match which is last"
                    (- count to-find)))
-        (unwind-protect (sit-for 5)
+        (unwind-protect (sit-for 3)
           (delete-overlay overlay))
         t))))
 
@@ -755,7 +757,7 @@ Prematurely ending indexing will still show what's found so far."
          (goto-char pos))))))
 
 (defun vlf-build-occur (regexp vlf-buffer)
-  "Build occur style index for REGEXP."
+  "Build occur style index for REGEXP over VLF-BUFFER."
   (let ((case-fold-search t)
         (line 1)
         (last-match-line 0)
