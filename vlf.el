@@ -696,7 +696,13 @@ EVENT may hold details of the invocation."
                             pos-relative)))
           (or (buffer-live-p buffer)
               (let ((occur-buffer (current-buffer)))
-                (setq buffer (vlf file))
+                (or (catch 'found
+                      (dolist (buf (buffer-list))
+                        (set-buffer buf)
+                        (and vlf-mode (equal file buffer-file-name)
+                             (setq buffer buf)
+                             (throw 'found t))))
+                    (setq buffer (vlf file)))
                 (switch-to-buffer occur-buffer)))
           (pop-to-buffer buffer)
           (vlf-move-to-chunk chunk-start chunk-end)
@@ -708,7 +714,7 @@ Prematurely ending indexing will still show what's found so far."
   (interactive (list (read-regexp "List lines matching regexp"
                                   (if regexp-history
                                       (car regexp-history)))))
-  (if (buffer-modified-p) ;use temporary buffer not to interfere with modifications 
+  (if (buffer-modified-p) ;use temporary buffer not to interfere with modifications
       (let ((vlf-buffer (current-buffer))
             (file buffer-file-name)
             (batch-size vlf-batch-size))
