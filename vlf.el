@@ -645,6 +645,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
     (define-key map "n" 'vlf-occur-next-match)
     (define-key map "p" 'vlf-occur-prev-match)
     (define-key map "\C-m" 'vlf-occur-visit)
+    (define-key map "\M-\r" 'vlf-occur-visit-new-buffer)
     (define-key map [mouse-1] 'vlf-occur-visit)
     (define-key map "o" 'vlf-occur-show)
     map)
@@ -684,10 +685,16 @@ EVENT may hold details of the invocation."
     (vlf-occur-visit event)
     (pop-to-buffer occur-buffer)))
 
+(defun vlf-occur-visit-new-buffer ()
+  "Visit `vlf-occur' link in new vlf buffer."
+  (interactive)
+  (let ((current-prefix-arg t))
+    (vlf-occur-visit)))
+
 (defun vlf-occur-visit (&optional event)
   "Visit current `vlf-occur' link in a vlf buffer.
-If original VLF buffer has been killed,
-open new VLF session each time.
+With prefix argument or if original VLF buffer has been killed,
+open new VLF session.
 EVENT may hold details of the invocation."
   (interactive (list last-nonmenu-event))
   (when event
@@ -699,20 +706,23 @@ EVENT may hold details of the invocation."
     (if file
         (let ((chunk-start (get-char-property pos 'chunk-start))
               (chunk-end (get-char-property pos 'chunk-end))
-              (buffer (get-char-property pos 'buffer))
+              (vlf-buffer (get-char-property pos 'buffer))
+              (occur-buffer (current-buffer))
               (match-pos (+ (get-char-property pos 'line-pos)
                             pos-relative)))
-          (or (buffer-live-p buffer)
-              (let ((occur-buffer (current-buffer)))
-                (or (catch 'found
-                      (dolist (buf (buffer-list))
-                        (set-buffer buf)
-                        (and vlf-mode (equal file buffer-file-name)
-                             (setq buffer buf)
-                             (throw 'found t))))
-                    (setq buffer (vlf file)))
-                (switch-to-buffer occur-buffer)))
-          (pop-to-buffer buffer)
+          (cond (current-prefix-arg
+                 (setq vlf-buffer (vlf file))
+                 (switch-to-buffer occur-buffer))
+                ((not (buffer-live-p vlf-buffer))
+                 (or (catch 'found
+                       (dolist (buf (buffer-list))
+                         (set-buffer buf)
+                         (and vlf-mode (equal file buffer-file-name)
+                              (setq vlf-buffer buf)
+                              (throw 'found t))))
+                     (setq vlf-buffer (vlf file)))
+                 (switch-to-buffer occur-buffer)))
+          (pop-to-buffer vlf-buffer)
           (vlf-move-to-chunk chunk-start chunk-end)
           (goto-char match-pos)))))
 
