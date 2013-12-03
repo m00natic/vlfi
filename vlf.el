@@ -277,6 +277,12 @@ Ask for confirmation if NOCONFIRM is nil."
           (unwind-protect (progn ,@body)
             (buffer-enable-undo))))
 
+(defmacro vlf-no-modifications (&rest body)
+  "Ensure there are no modifications and execute BODY."
+  `(if (buffer-modified-p)
+       (error "Save or discard your changes first")
+     ,@body))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; batch movement
 
@@ -342,63 +348,62 @@ If same as current chunk is requested, do nothing."
 (defun vlf-move-to-chunk-1 (start end)
   "Move to chunk determined by START END keeping as much edits if any.
 Return t if move hasn't been canceled."
-  (vlf-with-undo-disabled
-   (let ((modified (buffer-modified-p))
-         (start (max 0 start))
-         (end (min end vlf-file-size))
-         (edit-end (+ (position-bytes (point-max)) vlf-start-pos)))
-     (cond
-      ((and (= start vlf-start-pos) (= end edit-end))
-       (unless modified
-         (vlf-move-to-chunk-2 start end)
-         t))
-      ((or (<= edit-end start) (<= end vlf-start-pos))
-       (when (or (not modified)
-                 (y-or-n-p "Buffer modified, are you sure? ")) ;full chunk renewal
-         (vlf-move-to-chunk-2 start end)
-         t))
-      ((or (and (<= start vlf-start-pos) (<= edit-end end))
-           (not modified)
-           (y-or-n-p "Buffer modified, are you sure? "))
-       (let ((pos (+ (position-bytes (point)) vlf-start-pos))
-             (shift-start 0)
-             (shift-end 0)
-             (inhibit-read-only t))
-         (cond ((< end edit-end)
-                (delete-region (byte-to-position (1+
-                                                  (- end
-                                                     vlf-start-pos)))
-                               (point-max)))
-               ((< edit-end end)
-                (let ((edit-end-pos (point-max)))
-                  (goto-char edit-end-pos)
-                  (insert-file-contents buffer-file-name nil
-                                        vlf-end-pos end)
-                  (setq shift-end (cdr (vlf-adjust-chunk
-                                        vlf-end-pos end nil t
-                                        edit-end-pos))))))
-         (cond ((< vlf-start-pos start)
-                (delete-region (point-min) (byte-to-position
-                                            (- start vlf-start-pos))))
-               ((< start vlf-start-pos)
-                (let ((edit-end-pos (point-max)))
-                  (goto-char edit-end-pos)
-                  (insert-file-contents buffer-file-name nil
-                                        start vlf-start-pos)
-                  (setq shift-start (car
-                                     (vlf-adjust-chunk start
-                                                       vlf-start-pos
-                                                       t nil
-                                                       edit-end-pos)))
-                  (goto-char (point-min))
-                  (insert (delete-and-extract-region edit-end-pos
-                                                     (point-max))))))
-         (setq vlf-start-pos (- start shift-start)
-               vlf-end-pos (+ end shift-end))
-         (goto-char (or (byte-to-position (- pos vlf-start-pos))
-                        (point-max))))
-       (set-buffer-modified-p modified)
-       t)))))
+  (let ((modified (buffer-modified-p))
+        (start (max 0 start))
+        (end (min end vlf-file-size))
+        (edit-end (+ (position-bytes (point-max)) vlf-start-pos)))
+    (cond
+     ((and (= start vlf-start-pos) (= end edit-end))
+      (unless modified
+        (vlf-move-to-chunk-2 start end)
+        t))
+     ((or (<= edit-end start) (<= end vlf-start-pos))
+      (when (or (not modified)
+                (y-or-n-p "Chunk modified, are you sure? ")) ;full chunk renewal
+        (vlf-move-to-chunk-2 start end)
+        t))
+     ((or (and (<= start vlf-start-pos) (<= edit-end end))
+          (not modified)
+          (y-or-n-p "Chunk modified, are you sure? "))
+      (let ((pos (+ (position-bytes (point)) vlf-start-pos))
+            (shift-start 0)
+            (shift-end 0)
+            (inhibit-read-only t))
+        (cond ((< end edit-end)
+               (delete-region (byte-to-position (1+
+                                                 (- end
+                                                    vlf-start-pos)))
+                              (point-max)))
+              ((< edit-end end)
+               (let ((edit-end-pos (point-max)))
+                 (goto-char edit-end-pos)
+                 (insert-file-contents buffer-file-name nil
+                                       vlf-end-pos end)
+                 (setq shift-end (cdr (vlf-adjust-chunk
+                                       vlf-end-pos end nil t
+                                       edit-end-pos))))))
+        (cond ((< vlf-start-pos start)
+               (delete-region (point-min) (byte-to-position
+                                           (- start vlf-start-pos))))
+              ((< start vlf-start-pos)
+               (let ((edit-end-pos (point-max)))
+                 (goto-char edit-end-pos)
+                 (insert-file-contents buffer-file-name nil
+                                       start vlf-start-pos)
+                 (setq shift-start (car
+                                    (vlf-adjust-chunk start
+                                                      vlf-start-pos
+                                                      t nil
+                                                      edit-end-pos)))
+                 (goto-char (point-min))
+                 (insert (delete-and-extract-region edit-end-pos
+                                                    (point-max))))))
+        (setq vlf-start-pos (- start shift-start)
+              vlf-end-pos (+ end shift-end))
+        (goto-char (or (byte-to-position (- pos vlf-start-pos))
+                       (point-max))))
+      (set-buffer-modified-p modified)
+      t))))
 
 (defun vlf-move-to-chunk-2 (start end)
   "Unconditionally move to chunk determined by START END."
@@ -484,7 +489,6 @@ BATCH-STEP is amount of overlap between successive chunks."
                         (- vlf-file-size vlf-end-pos)
                       vlf-start-pos)
                     vlf-file-size)))
-    (set-buffer-modified-p nil)
     (vlf-with-undo-disabled
      (unwind-protect
          (catch 'end-of-file
@@ -546,7 +550,6 @@ BATCH-STEP is amount of overlap between successive chunks."
                         (progress-reporter-update reporter
                                                   vlf-end-pos)))))
            (progress-reporter-done reporter))
-       (set-buffer-modified-p nil)
        (if backward
            (vlf-goto-match match-chunk-start match-chunk-end
                            match-end-pos match-start-pos
@@ -597,7 +600,8 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                                   (if regexp-history
                                       (car regexp-history)))
                      (or current-prefix-arg 1)))
-  (vlf-re-search regexp count nil (/ vlf-batch-size 8)))
+  (vlf-no-modifications
+   (vlf-re-search regexp count nil (/ vlf-batch-size 8))))
 
 (defun vlf-re-search-backward (regexp count)
   "Search backward for REGEXP prefix COUNT number of times.
@@ -606,28 +610,30 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                                   (if regexp-history
                                       (car regexp-history)))
                      (or current-prefix-arg 1)))
-  (vlf-re-search regexp count t (/ vlf-batch-size 8)))
+  (vlf-no-modifications
+   (vlf-re-search regexp count t (/ vlf-batch-size 8))))
 
 (defun vlf-goto-line (n)
   "Go to line N.  If N is negative, count from the end of file."
   (interactive "nGo to line: ")
-  (let ((start-pos vlf-start-pos)
-        (end-pos vlf-end-pos)
-        (pos (point))
-        (success nil))
-    (unwind-protect
-        (if (< 0 n)
-            (progn (vlf-beginning-of-file)
-                   (goto-char (point-min))
-                   (setq success (vlf-re-search "[\n\C-m]" (1- n)
-                                                nil 0)))
-          (vlf-end-of-file)
-          (goto-char (point-max))
-          (setq success (vlf-re-search "[\n\C-m]" (- n) t 0)))
-      (if success
-          (message "Onto line %s" n)
-        (vlf-move-to-chunk start-pos end-pos)
-        (goto-char pos)))))
+  (vlf-no-modifications
+   (let ((start-pos vlf-start-pos)
+         (end-pos vlf-end-pos)
+         (pos (point))
+         (success nil))
+     (unwind-protect
+         (if (< 0 n)
+             (progn (vlf-beginning-of-file)
+                    (goto-char (point-min))
+                    (setq success (vlf-re-search "[\n\C-m]" (1- n)
+                                                 nil 0)))
+           (vlf-end-of-file)
+           (goto-char (point-max))
+           (setq success (vlf-re-search "[\n\C-m]" (- n) t 0)))
+       (if success
+           (message "Onto line %s" n)
+         (vlf-move-to-chunk start-pos end-pos)
+         (goto-char pos))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; occur
