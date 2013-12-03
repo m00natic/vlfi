@@ -272,16 +272,18 @@ Ask for confirmation if NOCONFIRM is nil."
 
 (defmacro vlf-with-undo-disabled (&rest body)
   "Execute BODY with temporarily disabled undo."
-  (declare (indent defun))
-  `(progn (buffer-disable-undo)
-          (unwind-protect (progn ,@body)
-            (buffer-enable-undo))))
+  `(let ((undo-enabled (not (eq buffer-undo-list t))))
+     (if undo-enabled
+         (buffer-disable-undo))
+     (unwind-protect (progn ,@body)
+       (if undo-enabled
+           (buffer-enable-undo)))))
 
-(defmacro vlf-no-modifications (&rest body)
-  "Ensure there are no modifications and execute BODY."
-  `(if (buffer-modified-p)
-       (error "Save or discard your changes first")
-     ,@body))
+(defun vlf-no-modifications ()
+  "Ensure there are no buffer modifications."
+  (if (buffer-modified-p)
+      (error "Save or discard your changes first")
+    t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; batch movement
@@ -596,44 +598,44 @@ successful.  Return nil if nothing found."
 (defun vlf-re-search-forward (regexp count)
   "Search forward for REGEXP prefix COUNT number of times.
 Search is performed chunk by chunk in `vlf-batch-size' memory."
-  (interactive (list (read-regexp "Search whole file"
-                                  (if regexp-history
-                                      (car regexp-history)))
-                     (or current-prefix-arg 1)))
-  (vlf-no-modifications
-   (vlf-re-search regexp count nil (/ vlf-batch-size 8))))
+  (interactive (if (vlf-no-modifications)
+                   (list (read-regexp "Search whole file"
+                                      (if regexp-history
+                                          (car regexp-history)))
+                         (or current-prefix-arg 1))))
+  (vlf-re-search regexp count nil (/ vlf-batch-size 8)))
 
 (defun vlf-re-search-backward (regexp count)
   "Search backward for REGEXP prefix COUNT number of times.
 Search is performed chunk by chunk in `vlf-batch-size' memory."
-  (interactive (list (read-regexp "Search whole file backward"
-                                  (if regexp-history
-                                      (car regexp-history)))
-                     (or current-prefix-arg 1)))
-  (vlf-no-modifications
-   (vlf-re-search regexp count t (/ vlf-batch-size 8))))
+  (interactive (if (vlf-no-modifications)
+                   (list (read-regexp "Search whole file backward"
+                                      (if regexp-history
+                                          (car regexp-history)))
+                         (or current-prefix-arg 1))))
+  (vlf-re-search regexp count t (/ vlf-batch-size 8)))
 
 (defun vlf-goto-line (n)
   "Go to line N.  If N is negative, count from the end of file."
-  (interactive "nGo to line: ")
-  (vlf-no-modifications
-   (let ((start-pos vlf-start-pos)
-         (end-pos vlf-end-pos)
-         (pos (point))
-         (success nil))
-     (unwind-protect
-         (if (< 0 n)
-             (progn (vlf-beginning-of-file)
-                    (goto-char (point-min))
-                    (setq success (vlf-re-search "[\n\C-m]" (1- n)
-                                                 nil 0)))
-           (vlf-end-of-file)
-           (goto-char (point-max))
-           (setq success (vlf-re-search "[\n\C-m]" (- n) t 0)))
-       (if success
-           (message "Onto line %s" n)
-         (vlf-move-to-chunk start-pos end-pos)
-         (goto-char pos))))))
+  (interactive (if (vlf-no-modifications)
+                   (list (read-number "Go to line: "))))
+  (let ((start-pos vlf-start-pos)
+        (end-pos vlf-end-pos)
+        (pos (point))
+        (success nil))
+    (unwind-protect
+        (if (< 0 n)
+            (progn (vlf-beginning-of-file)
+                   (goto-char (point-min))
+                   (setq success (vlf-re-search "[\n\C-m]" (1- n)
+                                                nil 0)))
+          (vlf-end-of-file)
+          (goto-char (point-max))
+          (setq success (vlf-re-search "[\n\C-m]" (- n) t 0)))
+      (if success
+          (message "Onto line %s" n)
+        (vlf-move-to-chunk start-pos end-pos)
+        (goto-char pos)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; occur
