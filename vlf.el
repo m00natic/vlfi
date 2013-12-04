@@ -554,6 +554,7 @@ BATCH-STEP is amount of overlap between successive chunks."
                         (progress-reporter-update reporter
                                                   vlf-end-pos)))))
            (progress-reporter-done reporter))
+       (set-buffer-modified-p nil)
        (if backward
            (vlf-goto-match match-chunk-start match-chunk-end
                            match-end-pos match-start-pos
@@ -841,6 +842,7 @@ Prematurely ending indexing will still show what's found so far."
                       last-line-pos (line-beginning-position))
                 (progress-reporter-update reporter vlf-end-pos))))
           (progress-reporter-done reporter))
+      (set-buffer-modified-p nil)
       (if (zerop total-matches)
           (progn (with-current-buffer occur-buffer
                    (set-buffer-modified-p nil))
