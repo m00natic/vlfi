@@ -109,8 +109,10 @@
                                  vlf-file-size))))
       (remove-hook 'write-file-functions 'vlf-write t)
       (let ((pos (+ vlf-start-pos (position-bytes (point)))))
-        (erase-buffer)
-        (insert-file-contents buffer-file-name)
+        (vlf-with-undo-disabled
+         (erase-buffer)
+         (insert-file-contents buffer-file-name))
+        (set-visited-file-modtime)
         (set-buffer-modified-p nil)
         (goto-char (byte-to-position pos)))
       (rename-buffer (file-name-nondirectory buffer-file-name) t))))
@@ -401,22 +403,22 @@ Return t if move hasn't been canceled."
 
 (defun vlf-move-to-chunk-2 (start end)
   "Unconditionally move to chunk determined by START END."
-  (vlf-with-undo-disabled
-    (setq vlf-start-pos (max 0 start)
-          vlf-end-pos (min end vlf-file-size))
-    (let ((inhibit-read-only t)
-          (pos (position-bytes (point))))
-      (erase-buffer)
-      (insert-file-contents buffer-file-name nil
-                            vlf-start-pos vlf-end-pos)
-      (let ((shifts (vlf-adjust-chunk vlf-start-pos vlf-end-pos t
-                                      t)))
-        (setq vlf-start-pos (- vlf-start-pos (car shifts))
-              vlf-end-pos (+ vlf-end-pos (cdr shifts)))
-        (goto-char (or (byte-to-position (+ pos (car shifts)))
-                       (point-max)))))
-    (set-buffer-modified-p nil)
-    (set-visited-file-modtime)))
+  (setq vlf-start-pos (max 0 start)
+        vlf-end-pos (min end vlf-file-size))
+  (let ((inhibit-read-only t)
+        (pos (position-bytes (point))))
+    (vlf-with-undo-disabled
+     (erase-buffer)
+     (insert-file-contents buffer-file-name nil
+                           vlf-start-pos vlf-end-pos)
+     (let ((shifts (vlf-adjust-chunk vlf-start-pos vlf-end-pos t
+                                     t)))
+       (setq vlf-start-pos (- vlf-start-pos (car shifts))
+             vlf-end-pos (+ vlf-end-pos (cdr shifts)))
+       (goto-char (or (byte-to-position (+ pos (car shifts)))
+                      (point-max))))))
+  (set-buffer-modified-p nil)
+  (set-visited-file-modtime))
 
 (defun vlf-adjust-chunk (start end &optional adjust-start adjust-end
                                position)
@@ -886,12 +888,12 @@ Save anyway? ")))
 (defun vlf-file-shift-back (size-change)
   "Shift file contents SIZE-CHANGE bytes back."
   (write-region nil nil buffer-file-name vlf-start-pos t)
-  (vlf-with-undo-disabled
-   (let ((read-start-pos vlf-end-pos)
-         (coding-system-for-write 'no-conversion)
-         (reporter (make-progress-reporter "Adjusting file content..."
-                                           vlf-end-pos
-                                           vlf-file-size)))
+  (let ((read-start-pos vlf-end-pos)
+        (coding-system-for-write 'no-conversion)
+        (reporter (make-progress-reporter "Adjusting file content..."
+                                          vlf-end-pos
+                                          vlf-file-size)))
+    (vlf-with-undo-disabled
      (while (vlf-shift-batch read-start-pos (- read-start-pos
                                                size-change))
        (setq read-start-pos (+ read-start-pos vlf-batch-size))
@@ -899,10 +901,10 @@ Save anyway? ")))
      ;; pad end with space
      (erase-buffer)
      (vlf-verify-size)
-     (insert-char 32 size-change)
-     (write-region nil nil buffer-file-name (- vlf-file-size
-                                               size-change) t)
-     (progress-reporter-done reporter))))
+     (insert-char 32 size-change))
+    (write-region nil nil buffer-file-name (- vlf-file-size
+                                              size-change) t)
+    (progress-reporter-done reporter)))
 
 (defun vlf-shift-batch (read-pos write-pos)
   "Read `vlf-batch-size' bytes from READ-POS and write them \
@@ -919,13 +921,13 @@ back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
 (defun vlf-file-shift-forward (size-change)
   "Shift file contents SIZE-CHANGE bytes forward.
 Done by saving content up front and then writing previous batch."
-  (vlf-with-undo-disabled
-   (let ((read-size (max (/ vlf-batch-size 2) size-change))
-         (read-pos vlf-end-pos)
-         (write-pos vlf-start-pos)
-         (reporter (make-progress-reporter "Adjusting file content..."
-                                           vlf-start-pos
-                                           vlf-file-size)))
+  (let ((read-size (max (/ vlf-batch-size 2) size-change))
+        (read-pos vlf-end-pos)
+        (write-pos vlf-start-pos)
+        (reporter (make-progress-reporter "Adjusting file content..."
+                                          vlf-start-pos
+                                          vlf-file-size)))
+    (vlf-with-undo-disabled
      (when (vlf-shift-batches read-size read-pos write-pos t)
        (setq write-pos (+ read-pos size-change)
              read-pos (+ read-pos read-size))
@@ -934,8 +936,8 @@ Done by saving content up front and then writing previous batch."
          (while (vlf-shift-batches read-size read-pos write-pos nil)
            (setq write-pos (+ read-pos size-change)
                  read-pos (+ read-pos read-size))
-           (progress-reporter-update reporter write-pos))))
-     (progress-reporter-done reporter))))
+           (progress-reporter-update reporter write-pos)))))
+    (progress-reporter-done reporter)))
 
 (defun vlf-shift-batches (read-size read-pos write-pos hide-read)
   "Append READ-SIZE bytes of file starting at READ-POS.
