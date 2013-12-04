@@ -62,8 +62,8 @@ respectively.
 
 *C-c C-v j* jumps to given chunk.  To see where you are in file and
 how many chunks there are (using the current batch size), look at the
-bracketed part of the buffer name, batch size is indicated in the
-mode-line.
+parenthesized part of the buffer name, batch size is also indicated at
+the end.
 
 ** Search whole file
 
@@ -74,10 +74,10 @@ beforehand.
 
 ** Occur over whole file
 
-*C-c C-v o* builds index for given regular expression just like M-x
-occur*.  It does this batch by batch over the whole file.  Note that
-even if you prematurely stop it with *C-g*, it will still show index
-of what's found so far.
+*C-c C-v o* builds index for given regular expression just like
+*M-x occur*.  It does this batch by batch over the whole file.  Note
+that even if you prematurely stop it with *C-g*, it will still show
+index of what's found so far.
 
 ** Jump to line
 

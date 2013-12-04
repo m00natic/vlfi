@@ -209,24 +209,14 @@ with the prefix argument DECREASE it is halved."
                          (* vlf-batch-size 2)))
   (vlf-move-to-batch vlf-start-pos))
 
-(defun vlf-format-buffer-name ()
-  "Return format for vlf buffer name."
-  (format "%s(%d/%d)"
-          (file-name-nondirectory buffer-file-name)
-          (/ vlf-end-pos vlf-batch-size)
-          (/ vlf-file-size vlf-batch-size)))
-
 (defun vlf-update-buffer-name ()
-  "Update the current buffer name and modeline."
-  (rename-buffer (vlf-format-buffer-name) t)
-  (setq minor-mode-alist
-        (mapcar (lambda (x)
-                  (if (eq 'vlf-mode (car x))
-                      `(vlf-mode ,(format " VLF[%s]"
-                                          (file-size-human-readable
-                                           vlf-batch-size)))
-                    x))
-         minor-mode-alist)))
+  "Update the current buffer name."
+  (rename-buffer (format "%s(%d/%d)[%s]"
+                         (file-name-nondirectory buffer-file-name)
+                         (/ vlf-end-pos vlf-batch-size)
+                         (/ vlf-file-size vlf-batch-size)
+                         (file-size-human-readable vlf-batch-size))
+                 t))
 
 (defun vlf-get-file-size (file)
   "Get size in bytes of FILE."
