@@ -77,7 +77,7 @@
     (define-key map "]" 'vlf-end-of-file)
     (define-key map "j" 'vlf-jump-to-chunk)
     (define-key map "l" 'vlf-goto-line)
-    (define-key map "q" 'vlf-discard-edit)
+    (define-key map "g" 'vlf-refresh)
     (define-key map-prefix "\C-c\C-v" map)
     map-prefix)
   "Keymap for `vlf-mode'.")
@@ -854,7 +854,7 @@ in file: %s" total-matches line regexp file)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; editing
 
-(defun vlf-discard-edit ()
+(defun vlf-refresh ()
   "Discard edit and refresh chunk from file."
   (interactive)
   (set-buffer-modified-p nil)

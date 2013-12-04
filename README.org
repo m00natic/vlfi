@@ -86,6 +86,10 @@ from the beginning, so again the bigger current batch size, the
 quicker.  With negative argument, lines are counted from the end of
 file.
 
+** Reload
+
+*C-c C-v g* discards modifications (if such) and reloads chunk.
+
 ** Edit and save
 
 If editing doesn't change size of the chunk, only this chunk is saved.
