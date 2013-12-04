@@ -178,7 +178,7 @@ OP-TYPE specifies the file operation being performed over FILENAME."
 (defadvice scroll-up (around vlf-scroll-up
                              activate compile)
   "Slide to next batch if at end of buffer in `vlf-mode'."
-  (if (and vlf-mode (eobp))
+  (if (and vlf-mode (pos-visible-in-window-p (point-max)))
       (progn (vlf-next-batch 1)
              (goto-char (point-min)))
     ad-do-it))
@@ -186,7 +186,7 @@ OP-TYPE specifies the file operation being performed over FILENAME."
 (defadvice scroll-down (around vlf-scroll-down
                                activate compile)
   "Slide to previous batch if at beginning of buffer in `vlf-mode'."
-  (if (and vlf-mode (bobp))
+  (if (and vlf-mode (pos-visible-in-window-p (point-min)))
       (progn (vlf-prev-batch 1)
              (goto-char (point-max)))
     ad-do-it))
