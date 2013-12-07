@@ -65,6 +65,7 @@
         (map (make-sparse-keymap)))
     (define-key map [next] 'vlf-next-batch)
     (define-key map [prior] 'vlf-prev-batch)
+    (define-key map "n" 'vlf-next-batch-from-point)
     (define-key map "+" 'vlf-change-batch-size)
     (define-key map "-"
       (lambda () "Decrease vlf batch size by factor of 2."
@@ -324,6 +325,12 @@ When given MINIMAL flag, skip non important operations."
     (if (= vlf-file-size end)          ; re-adjust start
         (setq start (max 0 (- end vlf-batch-size))))
     (vlf-move-to-chunk start end minimal)))
+
+(defun vlf-next-batch-from-point ()
+  "Display batch of file data starting from current point."
+  (interactive)
+  (vlf-move-to-batch (+ vlf-start-pos (position-bytes (point)) -1))
+  (goto-char (point-min)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; primitive chunk operations

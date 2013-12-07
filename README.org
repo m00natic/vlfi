@@ -57,6 +57,8 @@ refresh with *C-c C-v g*.
 prefix argument they move prefix number of batches.  With negative -
 append prefix number of batches.
 
+*C-c C-v n* displays batch starting from current point.
+
 *C-c C-v [* and *C-c C-v ]* take you to the beginning and end of file
 respectively.
 
