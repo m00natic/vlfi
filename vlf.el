@@ -341,11 +341,8 @@ If same as current chunk is requested, do nothing."
   (unless (and (= start vlf-start-pos)
                (= end vlf-end-pos))
     (vlf-verify-size)
-    (if (buffer-modified-p)
-        (if (vlf-move-to-chunk-1 start end)
-            (or minimal (vlf-update-buffer-name)))
-      (vlf-move-to-chunk-2 start end)
-      (or minimal (vlf-update-buffer-name)))))
+    (if (vlf-move-to-chunk-1 start end)
+        (or minimal (vlf-update-buffer-name)))))
 
 (defun vlf-move-to-chunk-1 (start end)
   "Move to chunk determined by START END keeping as much edits if any.
@@ -362,6 +359,7 @@ Return t if move hasn't been canceled."
      ((or (<= edit-end start) (<= end vlf-start-pos))
       (when (or (not modified)
                 (y-or-n-p "Chunk modified, are you sure? ")) ;full chunk renewal
+        (set-buffer-modified-p nil)
         (vlf-move-to-chunk-2 start end)
         t))
      ((or (and (<= start vlf-start-pos) (<= edit-end end))
@@ -372,10 +370,15 @@ Return t if move hasn't been canceled."
             (shift-end 0)
             (inhibit-read-only t))
         (cond ((< end edit-end)
-               (vlf-with-undo-disabled
-                (delete-region (byte-to-position
-                                (1+ (- end vlf-start-pos)))
-                               (point-max))))
+               (let* ((del-pos (1+ (byte-to-position
+                                    (- end vlf-start-pos))))
+                      (del-len (length (encode-coding-region
+                                        del-pos (point-max)
+                                        buffer-file-coding-system
+                                        t))))
+                 (setq end (- vlf-end-pos del-len))
+                 (vlf-with-undo-disabled
+                  (delete-region del-pos (point-max)))))
               ((< edit-end end)
                (let ((edit-end-pos (point-max)))
                  (goto-char edit-end-pos)
@@ -386,9 +389,15 @@ Return t if move hasn't been canceled."
                                         vlf-end-pos end nil t
                                         edit-end-pos)))))))
         (cond ((< vlf-start-pos start)
-               (vlf-with-undo-disabled
-                (delete-region (point-min) (byte-to-position
-                                            (- start vlf-start-pos)))))
+               (let* ((del-pos (1+ (byte-to-position
+                                    (- start vlf-start-pos))))
+                      (del-len (length (encode-coding-region
+                                        (point-min) del-pos
+                                        buffer-file-coding-system
+                                        t))))
+                 (setq start (+ vlf-start-pos del-len))
+                 (vlf-with-undo-disabled
+                  (delete-region (point-min) del-pos))))
               ((< start vlf-start-pos)
                (let ((edit-end-pos (point-max)))
                  (goto-char edit-end-pos)
@@ -876,7 +885,7 @@ in file: %s" total-matches line regexp file)
   "Discard edit and refresh chunk from file."
   (interactive)
   (set-buffer-modified-p nil)
-  (vlf-move-to-chunk vlf-start-pos vlf-end-pos))
+  (vlf-move-to-chunk-2 vlf-start-pos vlf-end-pos))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; saving
