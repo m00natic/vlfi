@@ -113,10 +113,7 @@
       (remove-hook 'write-file-functions 'vlf-write t)
       (let ((pos (+ vlf-start-pos (position-bytes (point)))))
         (vlf-with-undo-disabled
-         (erase-buffer)
-         (insert-file-contents buffer-file-name))
-        (set-visited-file-modtime)
-        (set-buffer-modified-p nil)
+         (insert-file-contents buffer-file-name t nil nil t))
         (goto-char (byte-to-position pos)))
       (rename-buffer (file-name-nondirectory buffer-file-name) t))))
 
@@ -375,34 +372,38 @@ Return t if move hasn't been canceled."
             (shift-end 0)
             (inhibit-read-only t))
         (cond ((< end edit-end)
-               (delete-region (byte-to-position (1+
-                                                 (- end
-                                                    vlf-start-pos)))
-                              (point-max)))
+               (vlf-with-undo-disabled
+                (delete-region (byte-to-position (1+
+                                                  (- end
+                                                     vlf-start-pos)))
+                               (point-max))))
               ((< edit-end end)
                (let ((edit-end-pos (point-max)))
                  (goto-char edit-end-pos)
-                 (insert-file-contents buffer-file-name nil
-                                       vlf-end-pos end)
-                 (setq shift-end (cdr (vlf-adjust-chunk
-                                       vlf-end-pos end nil t
-                                       edit-end-pos))))))
+                 (vlf-with-undo-disabled
+                  (insert-file-contents buffer-file-name nil
+                                        vlf-end-pos end)
+                  (setq shift-end (cdr (vlf-adjust-chunk
+                                        vlf-end-pos end nil t
+                                        edit-end-pos)))))))
         (cond ((< vlf-start-pos start)
-               (delete-region (point-min) (byte-to-position
-                                           (- start vlf-start-pos))))
+               (vlf-with-undo-disabled
+                (delete-region (point-min) (byte-to-position
+                                            (- start vlf-start-pos)))))
               ((< start vlf-start-pos)
                (let ((edit-end-pos (point-max)))
                  (goto-char edit-end-pos)
-                 (insert-file-contents buffer-file-name nil
-                                       start vlf-start-pos)
-                 (setq shift-start (car
-                                    (vlf-adjust-chunk start
-                                                      vlf-start-pos
-                                                      t nil
-                                                      edit-end-pos)))
-                 (goto-char (point-min))
-                 (insert (delete-and-extract-region edit-end-pos
-                                                    (point-max))))))
+                 (vlf-with-undo-disabled
+                  (insert-file-contents buffer-file-name nil
+                                        start vlf-start-pos)
+                  (setq shift-start (car
+                                     (vlf-adjust-chunk start
+                                                       vlf-start-pos
+                                                       t nil
+                                                       edit-end-pos)))
+                  (goto-char (point-min))
+                  (insert (delete-and-extract-region edit-end-pos
+                                                     (point-max)))))))
         (setq vlf-start-pos (- start shift-start)
               vlf-end-pos (+ end shift-end))
         (goto-char (or (byte-to-position (- pos vlf-start-pos))
