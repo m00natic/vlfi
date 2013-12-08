@@ -90,6 +90,7 @@
   :keymap vlf-mode-map
   (if vlf-mode
       (progn
+        (set (make-local-variable 'require-final-newline) nil)
         (add-hook 'write-file-functions 'vlf-write nil t)
         (set (make-local-variable 'revert-buffer-function)
              'vlf-revert)
@@ -108,6 +109,7 @@
               (y-or-n-p (format "Load whole file (%s)? "
                                 (file-size-human-readable
                                  vlf-file-size))))
+      (kill-local-variable 'require-final-newline)
       (remove-hook 'write-file-functions 'vlf-write t)
       (let ((pos (+ vlf-start-pos (position-bytes (point)))))
         (vlf-with-undo-disabled
@@ -431,7 +433,7 @@ Return t if move hasn't been canceled."
                                position)
   "Adjust chunk at absolute START to END till content can be \
 properly decoded.  ADJUST-START determines if trying to prepend bytes\
- to the beginning, ADJUST-END - add to the end.
+ to the beginning, ADJUST-END - append to the end.
 Use buffer POSITION as start if given.
 Return number of bytes moved back for proper decoding and number of
 bytes added to the end."
@@ -456,20 +458,14 @@ bytes added to the end."
           (insert-file-contents buffer-file-name nil start end)))
     ;; adjust end
     (when (and adjust-end (< end vlf-file-size))
-      (let ((expected-size (buffer-size)))
+      (let ((expected-size (buffer-size))) ; in case partial symbol is not displayed
         (while (and (= expected-size (buffer-size))
                     (< end vlf-file-size))
           (setq shift-end (1+ shift-end)
                 end (1+ end))
           (delete-region position (point-max))
           (goto-char position)
-          (insert-file-contents buffer-file-name nil start end)))
-      (when (< end vlf-file-size)
-        (setq shift-end (1- shift-end)
-              end (1- end))
-        (delete-region position (point-max))
-        (goto-char position)
-        (insert-file-contents buffer-file-name nil start end)))
+          (insert-file-contents buffer-file-name nil start end))))
     (cons shift-start shift-end)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
