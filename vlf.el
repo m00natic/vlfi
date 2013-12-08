@@ -373,9 +373,8 @@ Return t if move hasn't been canceled."
             (inhibit-read-only t))
         (cond ((< end edit-end)
                (vlf-with-undo-disabled
-                (delete-region (byte-to-position (1+
-                                                  (- end
-                                                     vlf-start-pos)))
+                (delete-region (byte-to-position
+                                (1+ (- end vlf-start-pos)))
                                (point-max))))
               ((< edit-end end)
                (let ((edit-end-pos (point-max)))
@@ -432,42 +431,57 @@ Return t if move hasn't been canceled."
 
 (defun vlf-adjust-chunk (start end &optional adjust-start adjust-end
                                position)
-  "Adjust chunk at absolute START to END till content can be \
+  "Adjust chunk at absolute START to END till content can be\
 properly decoded.  ADJUST-START determines if trying to prepend bytes\
  to the beginning, ADJUST-END - append to the end.
 Use buffer POSITION as start if given.
 Return number of bytes moved back for proper decoding and number of
 bytes added to the end."
-  (let ((position (or position (point-min)))
-        (shift-start 0)
-        (shift-end 0)
-        (chunk-size (- end start)))
-    ;; adjust beginning
+  (let ((shift-start 0)
+        (shift-end 0))
     (if adjust-start
-        (while (and (not (zerop start))
-                    (< shift-start 4)
-                    (< 4 (abs (- chunk-size
-                                 (length (encode-coding-region
-                                          position (point-max)
-                                          buffer-file-coding-system
-                                          t))))))
-          (setq shift-start (1+ shift-start)
-                start (1- start)
-                chunk-size (1+ chunk-size))
-          (delete-region position (point-max))
-          (goto-char position)
-          (insert-file-contents buffer-file-name nil start end)))
-    ;; adjust end
-    (when (and adjust-end (< end vlf-file-size))
-      (let ((expected-size (buffer-size))) ; in case partial symbol is not displayed
-        (while (and (= expected-size (buffer-size))
-                    (< end vlf-file-size))
-          (setq shift-end (1+ shift-end)
-                end (1+ end))
-          (delete-region position (point-max))
-          (goto-char position)
-          (insert-file-contents buffer-file-name nil start end))))
+        (let ((position (or position (point-min)))
+              (chunk-size (- end start)))
+          (while (and (not (zerop start))
+                      (< shift-start 4)
+                      (< 4 (abs (- chunk-size
+                                   (length (encode-coding-region
+                                            position (point-max)
+                                            buffer-file-coding-system
+                                            t))))))
+            (setq shift-start (1+ shift-start)
+                  start (1- start)
+                  chunk-size (1+ chunk-size))
+            (delete-region position (point-max))
+            (goto-char position)
+            (insert-file-contents buffer-file-name nil start end))))
+    (if adjust-end
+        (cond ((vlf-partial-decode-shown-p) ;remove raw bytes from end
+               (goto-char (point-max))
+               (while (eq (char-charset (preceding-char)) 'eight-bit)
+                 (setq shift-end (1- shift-end))
+                 (delete-char -1)))
+              ((< end vlf-file-size) ;add bytes until new character is displayed
+               (let ((position (or position (point-min)))
+                     (expected-size (buffer-size)))
+                 (while (and (progn
+                               (setq shift-end (1+ shift-end)
+                                     end (1+ end))
+                               (delete-region position (point-max))
+                               (goto-char position)
+                               (insert-file-contents buffer-file-name
+                                                     nil start end)
+                               (< end vlf-file-size))
+                             (= expected-size (buffer-size))))))))
     (cons shift-start shift-end)))
+
+(defun vlf-partial-decode-shown-p ()
+  "Determine if partial decode codes are displayed.
+This seems to be the case with GNU/Emacs before 24.4."
+  (cond ((< emacs-major-version 24) t)
+        ((< 24 emacs-major-version) nil)
+        (t ;; TODO: use (< emacs-minor-version 4) after 24.4 release
+         (string-lessp emacs-version "24.3.5"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; search
