@@ -97,6 +97,3 @@ file.
 If editing doesn't change size of the chunk, only this chunk is saved.
 Otherwise the remaining part of the file is adjusted batch by batch,
 so again you'd better have bigger current batch size.
-
-*Warning* Saving changes to non-ASCII chunks is a bit risky right
-now.
