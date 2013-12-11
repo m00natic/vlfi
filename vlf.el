@@ -74,11 +74,10 @@ Possible values are: nil to never use it;
 (put 'vlf-file-size 'permanent-local t)
 
 (defvar vlf-mode-map
-  (let ((map-prefix (make-sparse-keymap))
-        (map (make-sparse-keymap)))
-    (define-key map [next] 'vlf-next-batch)
-    (define-key map [prior] 'vlf-prev-batch)
-    (define-key map "n" 'vlf-next-batch-from-point)
+  (let ((map (make-sparse-keymap)))
+    (define-key map "n" 'vlf-next-batch)
+    (define-key map "p" 'vlf-prev-batch)
+    (define-key map " " 'vlf-next-batch-from-point)
     (define-key map "+" 'vlf-change-batch-size)
     (define-key map "-"
       (lambda () "Decrease vlf batch size by factor of 2."
@@ -91,16 +90,21 @@ Possible values are: nil to never use it;
     (define-key map "]" 'vlf-end-of-file)
     (define-key map "j" 'vlf-jump-to-chunk)
     (define-key map "l" 'vlf-goto-line)
-    (define-key map "g" 'vlf-refresh)
-    (define-key map-prefix "\C-c\C-v" map)
-    map-prefix)
+    (define-key map "g" 'vlf-revert)
+    map)
   "Keymap for `vlf-mode'.")
+
+(defvar vlf-prefix-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "\C-c\C-v" vlf-mode-map)
+    map)
+  "Prefixed keymap for `vlf-mode'.")
 
 (define-minor-mode vlf-mode
   "Mode to browse large files in."
   :lighter " VLF"
   :group 'vlf
-  :keymap vlf-mode-map
+  :keymap vlf-prefix-map
   (if vlf-mode
       (progn
         (set (make-local-variable 'require-final-newline) nil)
@@ -275,10 +279,12 @@ With FROM-END prefix, start from the back."
 (defun vlf-revert (&optional _ignore-auto noconfirm)
   "Revert current chunk.  Ignore _IGNORE-AUTO.
 Ask for confirmation if NOCONFIRM is nil."
-  (if (or noconfirm
-          (yes-or-no-p (format "Revert buffer from file %s? "
-                               buffer-file-name)))
-      (vlf-move-to-chunk-2 vlf-start-pos vlf-end-pos)))
+  (interactive)
+  (when (or noconfirm
+            (yes-or-no-p (format "Revert buffer from file %s? "
+                                 buffer-file-name)))
+    (set-buffer-modified-p nil)
+    (vlf-move-to-chunk-2 vlf-start-pos vlf-end-pos)))
 
 (defun vlf-jump-to-chunk (n)
   "Go to to chunk N."
@@ -311,8 +317,7 @@ When prefix argument is negative
  append next APPEND number of batches to the existing buffer."
   (interactive "p")
   (vlf-verify-size)
-  (let* ((end (min (+ vlf-end-pos (* vlf-batch-size
-                                     (abs append)))
+  (let* ((end (min (+ vlf-end-pos (* vlf-batch-size (abs append)))
                    vlf-file-size))
          (start (if (< append 0)
                     vlf-start-pos
@@ -328,8 +333,7 @@ When prefix argument is negative
   (interactive "p")
   (if (zerop vlf-start-pos)
       (error "Already at BOF"))
-  (let* ((start (max 0 (- vlf-start-pos (* vlf-batch-size
-                                           (abs prepend)))))
+  (let* ((start (max 0 (- vlf-start-pos (* vlf-batch-size (abs prepend)))))
          (end (if (< prepend 0)
                   vlf-end-pos
                 (+ start vlf-batch-size))))
@@ -900,15 +904,6 @@ in file: %s" total-matches line regexp file)
           (forward-char 2)
           (vlf-occur-mode))
         (display-buffer occur-buffer)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; editing
-
-(defun vlf-refresh ()
-  "Discard edit and refresh chunk from file."
-  (interactive)
-  (set-buffer-modified-p nil)
-  (vlf-move-to-chunk-2 vlf-start-pos vlf-end-pos))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; saving
