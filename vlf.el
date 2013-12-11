@@ -160,8 +160,9 @@ You can customize number of bytes displayed by customizing
   '(define-key dired-mode-map "V" 'dired-vlf))
 
 ;;;###autoload
-(defcustom vlf-forbidden-modes-list '(archive-mode tar-mode jka-compr
-                                                   git-commit-mode)
+(defcustom vlf-forbidden-modes-list
+  '(archive-mode tar-mode jka-compr git-commit-mode image-mode
+                 doc-view-mode doc-view-mode-maybe)
   "Major modes which VLF will not be automatically applied to."
   :group 'vlf
   :type '(list symbol))
