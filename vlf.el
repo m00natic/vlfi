@@ -412,10 +412,12 @@ Return t if move hasn't been canceled."
                   (goto-char (point-min))
                   (insert (delete-and-extract-region edit-end-pos
                                                      (point-max)))))))
-        (setq vlf-start-pos (- start shift-start)
-              vlf-end-pos (+ end shift-end))
-        (goto-char (or (byte-to-position (- pos vlf-start-pos))
-                       (point-max))))
+        (setq start (- start shift-start))
+        (goto-char (or (byte-to-position (- pos start))
+                       (byte-to-position (- pos vlf-start-pos))
+                       (point-max)))
+        (setq vlf-start-pos start
+              vlf-end-pos (+ end shift-end)))
       (set-buffer-modified-p modified)
       t))))
 
