@@ -50,15 +50,15 @@
 (put 'vlf-batch-size 'permanent-local t)
 
 ;;;###autoload
-(defcustom vlf-application 'default
+(defcustom vlf-application 'ask
   "Determines when `vlf' will be offered on opening files.
 Possible values are: nil to never use it;
-`default' offer `vlf' when file size is beyond `large-file-warning-threshold';
+`ask' offer `vlf' when file size is beyond `large-file-warning-threshold';
 `dont-ask' automatically use `vlf' for large files;
 `always' use `vlf' for all files."
   :group 'vlf
   :type '(radio (const :format "%v " nil)
-                (const :format "%v " default)
+                (const :format "%v " ask)
                 (const :format "%v " dont-ask)
                 (const :format "%v" always)))
 
@@ -112,10 +112,10 @@ Possible values are: nil to never use it;
         (set (make-local-variable 'revert-buffer-function)
              'vlf-revert)
         (make-local-variable 'vlf-batch-size)
-        (set (make-local-variable 'vlf-start-pos) -1)
-        (make-local-variable 'vlf-end-pos)
         (set (make-local-variable 'vlf-file-size)
              (vlf-get-file-size buffer-file-name))
+        (set (make-local-variable 'vlf-start-pos) 0)
+        (set (make-local-variable 'vlf-end-pos) 0)
         (let* ((pos (position-bytes (point)))
                (start (* (/ pos vlf-batch-size) vlf-batch-size)))
           (goto-char (byte-to-position (- pos start)))
@@ -173,7 +173,7 @@ OP-TYPE specifies the file operation being performed over FILENAME."
    ((eq vlf-application 'always)
     (vlf filename)
     (error ""))
-   ((and large-file-warning-threshold
+   ((and size large-file-warning-threshold
          (> size large-file-warning-threshold))
     (if (eq vlf-application 'dont-ask)
         (progn (vlf filename)
@@ -247,7 +247,7 @@ with the prefix argument DECREASE it is halved."
 
 (defun vlf-get-file-size (file)
   "Get size in bytes of FILE."
-  (nth 7 (file-attributes file)))
+  (or (nth 7 (file-attributes file)) 0))
 
 (defun vlf-verify-size ()
   "Update file size information if necessary and visited file time."
@@ -401,7 +401,10 @@ Return t if move hasn't been canceled."
                                         del-pos (point-max)
                                         buffer-file-coding-system
                                         t))))
-                 (setq end (- vlf-end-pos del-len))
+                 (setq end (- (if (zerop vlf-end-pos)
+                                  vlf-file-size
+                                vlf-end-pos)
+                              del-len))
                  (vlf-with-undo-disabled
                   (delete-region del-pos (point-max)))))
               ((< edit-end end)
