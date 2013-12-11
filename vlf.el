@@ -159,14 +159,14 @@ You can customize number of bytes displayed by customizing
 (eval-after-load "dired"
   '(define-key dired-mode-map "V" 'dired-vlf))
 
-;;;####autoload
+;;;###autoload
 (defcustom vlf-forbidden-modes-list '(archive-mode tar-mode jka-compr
                                                    git-commit-mode)
   "Major modes which VLF will not be automatically applied to."
   :group 'vlf
   :type '(list symbol))
 
-;;;####autoload
+;;;###autoload
 (defun vlf-determine-major-mode (filename)
   "Determine major mode from FILENAME."
   (let ((name filename)
