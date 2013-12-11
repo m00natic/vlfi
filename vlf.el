@@ -208,6 +208,7 @@ allow user to view file with `vlf', open it normally, or abort.
 OP-TYPE specifies the file operation being performed over FILENAME."
   (cond
    ((or (not vlf-application)
+        (not filename)
         (memq (vlf-determine-major-mode filename)
               vlf-forbidden-modes-list))
     ad-do-it)
