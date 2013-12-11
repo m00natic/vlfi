@@ -159,6 +159,45 @@ You can customize number of bytes displayed by customizing
 (eval-after-load "dired"
   '(define-key dired-mode-map "V" 'dired-vlf))
 
+;;;####autoload
+(defcustom vlf-forbidden-modes-list '(archive-mode tar-mode jka-compr
+                                                   git-commit-mode)
+  "Major modes which VLF will not be automatically applied to."
+  :group 'vlf
+  :type '(list symbol))
+
+;;;####autoload
+(defun vlf-determine-major-mode (filename)
+  "Determine major mode from FILENAME."
+  (let ((name filename)
+        (remote-id (file-remote-p filename))
+        mode)
+    ;; Remove backup-suffixes from file name.
+    (setq name (file-name-sans-versions name))
+    ;; Remove remote file name identification.
+    (and (stringp remote-id)
+         (string-match (regexp-quote remote-id) name)
+         (setq name (substring name (match-end 0))))
+    (setq mode
+          (if (memq system-type '(windows-nt cygwin))
+              ;; System is case-insensitive.
+              (let ((case-fold-search t))
+                (assoc-default name auto-mode-alist
+                               'string-match))
+            ;; System is case-sensitive.
+            (or ;; First match case-sensitively.
+             (let ((case-fold-search nil))
+               (assoc-default name auto-mode-alist
+                              'string-match))
+             ;; Fallback to case-insensitive match.
+             (and auto-mode-case-fold
+                  (let ((case-fold-search t))
+                    (assoc-default name auto-mode-alist
+                                   'string-match))))))
+    (if (and mode (consp mode))
+        (cadr mode)
+      mode)))
+
 ;;;###autoload
 (defadvice abort-if-file-too-large (around vlf-if-file-too-large
                                            (size op-type
@@ -168,7 +207,9 @@ You can customize number of bytes displayed by customizing
 allow user to view file with `vlf', open it normally, or abort.
 OP-TYPE specifies the file operation being performed over FILENAME."
   (cond
-   ((not vlf-application)
+   ((or (not vlf-application)
+        (memq (vlf-determine-major-mode filename)
+              vlf-forbidden-modes-list))
     ad-do-it)
    ((eq vlf-application 'always)
     (vlf filename)
