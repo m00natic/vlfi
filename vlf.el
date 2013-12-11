@@ -45,9 +45,22 @@
 
 (defcustom vlf-batch-size 1024
   "Defines how large each batch of file data is (in bytes)."
-  :type 'integer
-  :group 'vlf)
+  :group 'vlf
+  :type 'integer)
 (put 'vlf-batch-size 'permanent-local t)
+
+;;;###autoload
+(defcustom vlf-application 'default
+  "Determines when `vlf' will be offered on opening files.
+Possible values are: nil to never use it;
+`default' offer `vlf' when file size is beyond `large-file-warning-threshold';
+`dont-ask' automatically use `vlf' for large files;
+`always' use `vlf' for all files."
+  :group 'vlf
+  :type '(radio (const :format "%v " nil)
+                (const :format "%v " default)
+                (const :format "%v " dont-ask)
+                (const :format "%v" always)))
 
 ;;; Keep track of file position.
 (defvar vlf-start-pos 0
@@ -150,28 +163,36 @@ You can customize number of bytes displayed by customizing
   "If file SIZE larger than `large-file-warning-threshold', \
 allow user to view file with `vlf', open it normally, or abort.
 OP-TYPE specifies the file operation being performed over FILENAME."
-  (and large-file-warning-threshold size
-       (> size large-file-warning-threshold)
-       (let ((char nil))
-         (while (not (memq (setq char
-                                 (read-event
-                                  (propertize
-                                   (format
-                                    "File %s is large (%s): \
+  (cond
+   ((not vlf-application)
+    ad-do-it)
+   ((eq vlf-application 'always)
+    (vlf filename)
+    (error ""))
+   ((and large-file-warning-threshold
+         (> size large-file-warning-threshold))
+    (if (eq vlf-application 'dont-ask)
+        (progn (vlf filename)
+               (error ""))
+      (let ((char nil))
+        (while (not (memq (setq char
+                                (read-event
+                                 (propertize
+                                  (format
+                                   "File %s is large (%s): \
 %s normally (o), %s with vlf (v) or abort (a)"
-                                    (if filename
-                                        (file-name-nondirectory filename)
-                                      "")
-                                    (file-size-human-readable size)
-                                    op-type op-type)
-                                   'face 'minibuffer-prompt)))
-                           '(?o ?O ?v ?V ?a ?A))))
-         (cond ((memq char '(?o ?O)))
-               ((memq char '(?v ?V))
-                (vlf filename)
-                (error ""))
-               ((memq char '(?a ?A))
-                (error "Aborted"))))))
+                                   (if filename
+                                       (file-name-nondirectory filename)
+                                     "")
+                                   (file-size-human-readable size)
+                                   op-type op-type)
+                                  'face 'minibuffer-prompt)))
+                          '(?o ?O ?v ?V ?a ?A))))
+        (cond ((memq char '(?v ?V))
+               (vlf filename)
+               (error ""))
+              ((memq char '(?a ?A))
+               (error "Aborted"))))))))
 
 
 ;; scroll auto batching
