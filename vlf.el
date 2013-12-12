@@ -210,8 +210,6 @@ You can customize number of bytes displayed by customizing
 
 ;;;###autoload
 (defadvice abort-if-file-too-large (around vlf-if-file-too-large
-                                           (size op-type
-                                                 &optional filename)
                                            compile activate)
   "If file SIZE larger than `large-file-warning-threshold', \
 allow user to view file with `vlf', open it normally, or abort.
@@ -251,7 +249,6 @@ OP-TYPE specifies the file operation being performed over FILENAME."
               ((memq char '(?a ?A))
                (error "Aborted"))))))))
 
-
 ;; scroll auto batching
 (defadvice scroll-up (around vlf-scroll-up
                              activate compile)
@@ -274,7 +271,7 @@ OP-TYPE specifies the file operation being performed over FILENAME."
 (unless (fboundp 'file-size-human-readable)
   (defun file-size-human-readable (file-size)
     "Print FILE-SIZE in MB."
-    (format "%.1fMB" (/ file-size 1048576.0))))
+    (format "%.3fMB" (/ file-size 1048576.0))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; utilities
