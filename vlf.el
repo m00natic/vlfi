@@ -217,6 +217,7 @@ You can customize number of bytes displayed by customizing
 allow user to view file with `vlf', open it normally, or abort.
 OP-TYPE specifies the file operation being performed over FILENAME."
   (cond
+   ((or (not size) (zerop size)))
    ((or (not vlf-application)
         (not filename)
         (memq (vlf-determine-major-mode filename)
@@ -225,8 +226,8 @@ OP-TYPE specifies the file operation being performed over FILENAME."
    ((eq vlf-application 'always)
     (vlf filename)
     (error ""))
-   ((and size large-file-warning-threshold
-         (> size large-file-warning-threshold))
+   ((and large-file-warning-threshold
+         (< large-file-warning-threshold size))
     (if (eq vlf-application 'dont-ask)
         (progn (vlf filename)
                (error ""))
