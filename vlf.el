@@ -100,6 +100,15 @@ Possible values are: nil to never use it;
     map)
   "Prefixed keymap for `vlf-mode'.")
 
+(defmacro vlf-with-undo-disabled (&rest body)
+  "Execute BODY with temporarily disabled undo."
+  `(let ((undo-enabled (not (eq buffer-undo-list t))))
+     (if undo-enabled
+         (buffer-disable-undo))
+     (unwind-protect (progn ,@body)
+       (if undo-enabled
+           (buffer-enable-undo)))))
+
 (define-minor-mode vlf-mode
   "Mode to browse large files in."
   :lighter " VLF"
@@ -333,15 +342,6 @@ Ask for confirmation if NOCONFIRM is nil."
   "Go to to chunk N."
   (interactive "nGoto to chunk: ")
   (vlf-move-to-batch (* (1- n) vlf-batch-size)))
-
-(defmacro vlf-with-undo-disabled (&rest body)
-  "Execute BODY with temporarily disabled undo."
-  `(let ((undo-enabled (not (eq buffer-undo-list t))))
-     (if undo-enabled
-         (buffer-disable-undo))
-     (unwind-protect (progn ,@body)
-       (if undo-enabled
-           (buffer-enable-undo)))))
 
 (defun vlf-no-modifications ()
   "Ensure there are no buffer modifications."
@@ -971,14 +971,13 @@ Save anyway? ")))
           (progn
             (write-region nil nil buffer-file-name vlf-start-pos t)
             (when (zerop vlf-file-size) ;new file
-              (setq vlf-file-size region-length
-                    vlf-end-pos region-length
-                    vlf-start-pos 1)
+              (setq vlf-file-size (vlf-get-file-size buffer-file-name)
+                    vlf-end-pos vlf-file-size)
               (vlf-update-buffer-name)))
         (if (< 0 size-change)
             (vlf-file-shift-back size-change)
           (vlf-file-shift-forward (- size-change)))
-        (vlf-verify-size)
+        (setq vlf-file-size (vlf-get-file-size buffer-file-name))
         (vlf-move-to-chunk-2 vlf-start-pos
                              (if (< (- vlf-end-pos vlf-start-pos)
                                     vlf-batch-size)
