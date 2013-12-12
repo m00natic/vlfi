@@ -962,29 +962,31 @@ If changing size of chunk, shift remaining file content."
              (or (verify-visited-file-modtime (current-buffer))
                  (y-or-n-p "File has changed since visited or saved.  \
 Save anyway? ")))
-    (let* ((pos (point))
-           (region-length (length (encode-coding-region
-                                   (point-min) (point-max)
-                                   buffer-file-coding-system t)))
-           (size-change (- vlf-end-pos vlf-start-pos region-length)))
-      (if (or (zerop size-change) (zerop vlf-file-size))
-          (progn
+    (if (zerop vlf-file-size)           ;new file
+        (progn
+          (write-region nil nil buffer-file-name vlf-start-pos t)
+          (setq vlf-file-size (vlf-get-file-size buffer-file-name)
+                vlf-end-pos vlf-file-size)
+          (vlf-update-buffer-name))
+      (let* ((region-length (length (encode-coding-region
+                                     (point-min) (point-max)
+                                     buffer-file-coding-system t)))
+             (size-change (- vlf-end-pos vlf-start-pos
+                             region-length)))
+        (if (zerop size-change)
             (write-region nil nil buffer-file-name vlf-start-pos t)
-            (when (zerop vlf-file-size) ;new file
-              (setq vlf-file-size (vlf-get-file-size buffer-file-name)
-                    vlf-end-pos vlf-file-size)
-              (vlf-update-buffer-name)))
-        (if (< 0 size-change)
-            (vlf-file-shift-back size-change)
-          (vlf-file-shift-forward (- size-change)))
-        (setq vlf-file-size (vlf-get-file-size buffer-file-name))
-        (vlf-move-to-chunk-2 vlf-start-pos
-                             (if (< (- vlf-end-pos vlf-start-pos)
-                                    vlf-batch-size)
-                                 (+ vlf-start-pos vlf-batch-size)
-                               vlf-end-pos))
-        (vlf-update-buffer-name)
-        (goto-char pos))))
+          (let ((pos (point)))
+            (if (< 0 size-change)
+                (vlf-file-shift-back size-change)
+              (vlf-file-shift-forward (- size-change)))
+            (setq vlf-file-size (vlf-get-file-size buffer-file-name))
+            (vlf-move-to-chunk-2 vlf-start-pos
+                                 (if (< (- vlf-end-pos vlf-start-pos)
+                                        vlf-batch-size)
+                                     (+ vlf-start-pos vlf-batch-size)
+                                   vlf-end-pos))
+            (vlf-update-buffer-name)
+            (goto-char pos))))))
   t)
 
 (defun vlf-file-shift-back (size-change)
