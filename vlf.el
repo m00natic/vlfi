@@ -192,13 +192,11 @@ You can customize number of bytes displayed by customizing
           (if (memq system-type '(windows-nt cygwin))
               ;; System is case-insensitive.
               (let ((case-fold-search t))
-                (assoc-default name auto-mode-alist
-                               'string-match))
+                (assoc-default name auto-mode-alist 'string-match))
             ;; System is case-sensitive.
             (or ;; First match case-sensitively.
              (let ((case-fold-search nil))
-               (assoc-default name auto-mode-alist
-                              'string-match))
+               (assoc-default name auto-mode-alist 'string-match))
              ;; Fallback to case-insensitive match.
              (and auto-mode-case-fold
                   (let ((case-fold-search t))
@@ -297,7 +295,7 @@ with the prefix argument DECREASE it is halved."
 
 (defun vlf-get-file-size (file)
   "Get size in bytes of FILE."
-  (or (nth 7 (file-attributes file)) 0))
+  (or (nth 7 (file-attributes (file-truename file))) 0))
 
 (defun vlf-verify-size ()
   "Update file size information if necessary and visited file time."
