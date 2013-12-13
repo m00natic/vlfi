@@ -392,7 +392,8 @@ When given MINIMAL flag, skip non important operations."
 (defun vlf-next-batch-from-point ()
   "Display batch of file data starting from current point."
   (interactive)
-  (vlf-move-to-batch (+ vlf-start-pos (position-bytes (point)) -1))
+  (let ((start (+ vlf-start-pos (position-bytes (point)) -1)))
+    (vlf-move-to-chunk start (+ start vlf-batch-size)))
   (goto-char (point-min)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
