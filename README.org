@@ -79,6 +79,9 @@ refresh with *C-c C-v g*.
 
 ** Move around
 
+Scrolling automatically triggers moving to previous or next chunk at
+the beginning or end respectively of the current one.
+
 *C-c C-v n* and *C-c C-v p* move batch by batch.  With positive
 prefix argument they move prefix number of batches.  With negative -
 append prefix number of batches.
@@ -92,6 +95,16 @@ respectively.
 how many chunks there are (using the current batch size), look at the
 parenthesized part of the buffer name, batch size is also indicated at
 the end.
+
+** Follow point
+
+Intelligent continuous recenter around point in current buffer can be
+enabled with:
+
+*M-x vlf-start-following*
+
+You are asked for number of idle seconds interval for automatic
+update.  To cancel following invoke *M-x vlf-stop-following*.
 
 ** Search whole file
 

@@ -73,6 +73,11 @@ Possible values are: nil to never use it;
 (defvar vlf-file-size 0 "Total size of presented file.")
 (put 'vlf-file-size 'permanent-local t)
 
+(defvar vlf-follow-timer nil
+  "Contains timer and it's repeat interval if vlf buffer is set to\
+continuously recenter.")
+(put 'vlf-follow-timer 'permanent-local t)
+
 (defvar vlf-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "n" 'vlf-next-batch)
@@ -125,11 +130,13 @@ Possible values are: nil to never use it;
              (vlf-get-file-size buffer-file-truename))
         (set (make-local-variable 'vlf-start-pos) 0)
         (set (make-local-variable 'vlf-end-pos) 0)
+        (set (make-local-variable 'vlf-follow-timer) nil)
         (let* ((pos (position-bytes (point)))
                (start (* (/ pos vlf-batch-size) vlf-batch-size)))
           (goto-char (byte-to-position (- pos start)))
           (vlf-move-to-batch start)))
     (kill-local-variable 'revert-buffer-function)
+    (vlf-stop-following)
     (when (or (not large-file-warning-threshold)
               (< vlf-file-size large-file-warning-threshold)
               (y-or-n-p (format "Load whole file (%s)? "
@@ -562,6 +569,50 @@ This seems to be the case with GNU/Emacs before 24.4."
         ((< 24 emacs-major-version) nil)
         (t ;; TODO: use (< emacs-minor-version 4) after 24.4 release
          (string-lessp emacs-version "24.3.5"))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; follow point
+
+(defun vlf-recenter (vlf-buffer)
+  "Recenter chunk around current point in VLF-BUFFER."
+  (and vlf-follow-timer
+       (eq (current-buffer) vlf-buffer)
+       (or (pos-visible-in-window-p (point-min))
+           (pos-visible-in-window-p (point-max)))
+       (let ((current-pos (+ vlf-start-pos (position-bytes (point))))
+             (half-batch (/ vlf-batch-size 2)))
+         (if (buffer-modified-p)
+             (progn
+               (let ((edit-end (+ (position-bytes (point-max))
+                                  vlf-start-pos)))
+                 (vlf-move-to-chunk (min vlf-start-pos
+                                         (- current-pos half-batch))
+                                    (max edit-end
+                                         (+ current-pos half-batch))))
+               (goto-char (byte-to-position (- current-pos
+                                               vlf-start-pos))))
+           (vlf-move-to-batch (- current-pos half-batch))
+           (and (< half-batch current-pos)
+                (< half-batch (- vlf-file-size current-pos))
+                (goto-char (byte-to-position half-batch)))))))
+
+(defun vlf-stop-following ()
+  "Stop continuous recenter."
+  (interactive)
+  (when vlf-follow-timer
+    (cancel-timer (car vlf-follow-timer))
+    (setq vlf-follow-timer nil)))
+
+(defun vlf-start-following (interval)
+  "Continuously recenter chunk around point every INTERVAL seconds."
+  (interactive "nNumber of seconds: ")
+  (when vlf-mode
+    (vlf-stop-following)
+    (setq vlf-follow-timer (cons (run-with-idle-timer interval interval
+                                                      'vlf-recenter
+                                                      (current-buffer))
+                                 interval))
+    (add-hook 'kill-buffer-hook 'vlf-stop-following nil t)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; search
