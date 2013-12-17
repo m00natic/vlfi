@@ -108,12 +108,10 @@ continuously recenter.")
 
 (defmacro vlf-with-undo-disabled (&rest body)
   "Execute BODY with temporarily disabled undo."
-  `(let ((undo-enabled (not (eq buffer-undo-list t))))
-     (if undo-enabled
-         (buffer-disable-undo))
+  `(let ((undo-list buffer-undo-list))
+     (setq buffer-undo-list t)
      (unwind-protect (progn ,@body)
-       (if undo-enabled
-           (buffer-enable-undo)))))
+       (setq buffer-undo-list undo-list))))
 
 (define-minor-mode vlf-mode
   "Mode to browse large files in."
