@@ -49,6 +49,7 @@
   :type 'integer)
 (put 'vlf-batch-size 'permanent-local t)
 
+;;; used by the autoloaded abort-if-file-too-large advice
 ;;;###autoload
 (defcustom vlf-application 'ask
   "Determines when `vlf' will be offered on opening files.
@@ -175,14 +176,16 @@ You can customize number of bytes displayed by customizing
 (eval-after-load "dired"
   '(define-key dired-mode-map "V" 'dired-vlf))
 
+;;; used by the autoloaded abort-if-file-too-large advice
 ;;;###autoload
 (defcustom vlf-forbidden-modes-list
   '(archive-mode tar-mode jka-compr git-commit-mode image-mode
-                 doc-view-mode doc-view-mode-maybe)
+                 doc-view-mode doc-view-mode-maybe ebrowse-tree-mode)
   "Major modes which VLF will not be automatically applied to."
   :group 'vlf
   :type '(list symbol))
 
+;;; used by the autoloaded abort-if-file-too-large advice
 ;;;###autoload
 (defun vlf-determine-major-mode (filename)
   "Determine major mode from FILENAME."
@@ -213,6 +216,7 @@ You can customize number of bytes displayed by customizing
         (cadr mode)
       mode)))
 
+;;; autoload this so vlf is available as soon as file is opened
 ;;;###autoload
 (defadvice abort-if-file-too-large (around vlf-if-file-too-large
                                            compile activate)
@@ -253,6 +257,22 @@ OP-TYPE specifies the file operation being performed over FILENAME."
                (error ""))
               ((memq char '(?a ?A))
                (error "Aborted"))))))))
+
+;; never apply VLF over TAGS files
+;;;###autoload
+(eval-after-load "etags"
+  '(progn
+     (defadvice tags-verify-table (around vlf-tags-verify-table
+                                          compile activate)
+       "Temporarily disable `vlf-mode'."
+       (let ((vlf-application nil))
+         ad-do-it))
+
+     (defadvice tag-find-file-of-tag-noselect
+         (around vlf-tag-find-file-of-tag compile activate)
+       "Temporarily disable `vlf-mode'."
+       (let ((vlf-application nil))
+         ad-do-it))))
 
 ;; scroll auto batching
 (defadvice scroll-up (around vlf-scroll-up
