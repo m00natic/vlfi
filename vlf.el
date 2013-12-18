@@ -113,6 +113,67 @@ continuously recenter.")
      (unwind-protect (progn ,@body)
        (setq buffer-undo-list undo-list))))
 
+(defun vlf-shift-undo-list (n)
+  "Shift undo list element regions by N."
+  (or (eq buffer-undo-list t)
+      (let (undo-list)
+        (setq buffer-undo-list
+              (catch 'end
+                (dolist (el buffer-undo-list)
+                  (push
+                   (cond
+                    ((null el) nil)
+                    ((numberp el) (let ((pos (+ el n)))
+                                    (if (< n 0)
+                                        (throw 'end undo-list)
+                                      pos)))
+                    (t (let ((head (car el)))
+                         (cond ((numberp head)
+                                (let ((beg (+ head n)))
+                                  (if (< beg 0)
+                                      (throw 'end undo-list)
+                                    (cons beg (+ (cdr el) n)))))
+                               ((stringp head)
+                                (let* ((pos (cdr el))
+                                       (positive (< 0 pos))
+                                       (new (+ (abs pos) n)))
+                                  (if (< new 0)
+                                      (throw 'end undo-list)
+                                    (cons head (if positive
+                                                   new
+                                                 (- new))))))
+                               ((null head)
+                                (let ((beg (+ (nth 3 el) n)))
+                                  (if (< beg 0)
+                                      (throw 'end undo-list)
+                                    (cons
+                                     nil
+                                     (cons
+                                      (cadr el)
+                                      (cons
+                                       (nth 2 el)
+                                       (cons beg
+                                             (+ (cddr
+                                                 (cddr el)) n))))))))
+                               ((and (eq head 'apply)
+                                     (numberp (cadr el)))
+                                (let ((beg (+ (nth 2 el) n)))
+                                  (if (< beg 0)
+                                      (throw 'end undo-list)
+                                    (cons
+                                     'apply
+                                     (cons
+                                      (cadr el)
+                                      (cons
+                                       beg
+                                       (cons
+                                        (+ (nth 3 el) n)
+                                        (cons (nth 4 el)
+                                              (cdr (last el))))))))))
+                               (t el)))))
+                   undo-list))
+                undo-list)))))
+
 (define-minor-mode vlf-mode
   "Mode to browse large files in."
   :lighter " VLF"
@@ -491,7 +552,8 @@ Return t if move hasn't been canceled."
                                         t))))
                  (setq start (+ vlf-start-pos del-len))
                  (vlf-with-undo-disabled
-                  (delete-region (point-min) del-pos))))
+                  (delete-region (point-min) del-pos))
+                 (vlf-shift-undo-list (- del-len))))
               ((< start vlf-start-pos)
                (let ((edit-end-pos (point-max)))
                  (goto-char edit-end-pos)
@@ -505,7 +567,8 @@ Return t if move hasn't been canceled."
                                                        edit-end-pos)))
                   (goto-char (point-min))
                   (insert (delete-and-extract-region edit-end-pos
-                                                     (point-max)))))))
+                                                     (point-max))))
+                 (vlf-shift-undo-list (- (point-max) edit-end-pos)))))
         (setq start (- start shift-start))
         (goto-char (or (byte-to-position (- pos start))
                        (byte-to-position (- pos vlf-start-pos))
@@ -532,6 +595,7 @@ Return t if move hasn't been canceled."
        (goto-char (or (byte-to-position (+ pos (car shifts)))
                       (point-max))))))
   (set-buffer-modified-p nil)
+  (setq buffer-undo-list nil)
   (set-visited-file-modtime))
 
 (defun vlf-adjust-chunk (start end &optional adjust-start adjust-end
