@@ -116,63 +116,64 @@ continuously recenter.")
 (defun vlf-shift-undo-list (n)
   "Shift undo list element regions by N."
   (or (eq buffer-undo-list t)
-      (let (undo-list)
-        (setq buffer-undo-list
-              (catch 'end
-                (dolist (el buffer-undo-list)
-                  (push
-                   (cond
-                    ((null el) nil)
-                    ((numberp el) (let ((pos (+ el n)))
-                                    (if (< n 0)
-                                        (throw 'end undo-list)
-                                      pos)))
-                    (t (let ((head (car el)))
-                         (cond ((numberp head)
-                                (let ((beg (+ head n)))
-                                  (if (< beg 0)
-                                      (throw 'end undo-list)
-                                    (cons beg (+ (cdr el) n)))))
-                               ((stringp head)
-                                (let* ((pos (cdr el))
-                                       (positive (< 0 pos))
-                                       (new (+ (abs pos) n)))
-                                  (if (< new 0)
-                                      (throw 'end undo-list)
-                                    (cons head (if positive
-                                                   new
-                                                 (- new))))))
-                               ((null head)
-                                (let ((beg (+ (nth 3 el) n)))
-                                  (if (< beg 0)
-                                      (throw 'end undo-list)
-                                    (cons
-                                     nil
+      (setq buffer-undo-list
+            (nreverse
+             (let ((min (point-min))
+                   undo-list)
+               (catch 'end
+                 (dolist (el buffer-undo-list undo-list)
+                   (push
+                    (cond
+                     ((null el) nil)
+                     ((numberp el) (let ((pos (+ el n)))
+                                     (if (< pos min)
+                                         (throw 'end undo-list)
+                                       pos)))
+                     (t (let ((head (car el)))
+                          (cond ((numberp head)
+                                 (let ((beg (+ head n)))
+                                   (if (< beg min)
+                                       (throw 'end undo-list)
+                                     (cons beg (+ (cdr el) n)))))
+                                ((stringp head)
+                                 (let* ((pos (cdr el))
+                                        (positive (< 0 pos))
+                                        (new (+ (abs pos) n)))
+                                   (if (< new min)
+                                       (throw 'end undo-list)
+                                     (cons head (if positive
+                                                    new
+                                                  (- new))))))
+                                ((null head)
+                                 (let ((beg (+ (nth 3 el) n)))
+                                   (if (< beg min)
+                                       (throw 'end undo-list)
                                      (cons
-                                      (cadr el)
+                                      nil
                                       (cons
-                                       (nth 2 el)
-                                       (cons beg
-                                             (+ (cddr
-                                                 (cddr el)) n))))))))
-                               ((and (eq head 'apply)
-                                     (numberp (cadr el)))
-                                (let ((beg (+ (nth 2 el) n)))
-                                  (if (< beg 0)
-                                      (throw 'end undo-list)
-                                    (cons
-                                     'apply
-                                     (cons
-                                      (cadr el)
-                                      (cons
-                                       beg
+                                       (cadr el)
                                        (cons
-                                        (+ (nth 3 el) n)
-                                        (cons (nth 4 el)
-                                              (cdr (last el))))))))))
-                               (t el)))))
-                   undo-list))
-                undo-list)))))
+                                        (nth 2 el)
+                                        (cons beg
+                                              (+ (cddr
+                                                  (cddr el)) n))))))))
+                                ((and (eq head 'apply)
+                                      (numberp (cadr el)))
+                                 (let ((beg (+ (nth 2 el) n)))
+                                   (if (< beg min)
+                                       (throw 'end undo-list)
+                                     (cons
+                                      'apply
+                                      (cons
+                                       (cadr el)
+                                       (cons
+                                        beg
+                                        (cons
+                                         (+ (nth 3 el) n)
+                                         (cons (nth 4 el)
+                                               (cdr (last el))))))))))
+                                (t el)))))
+                    undo-list))))))))
 
 (define-minor-mode vlf-mode
   "Mode to browse large files in."
@@ -551,9 +552,10 @@ Return t if move hasn't been canceled."
                                         buffer-file-coding-system
                                         t))))
                  (setq start (+ vlf-start-pos del-len))
-                 (vlf-with-undo-disabled
-                  (delete-region (point-min) del-pos))
-                 (vlf-shift-undo-list (- del-len))))
+                 (let ((del-length (- (point-min) del-pos)))
+                   (vlf-with-undo-disabled
+                    (delete-region (point-min) del-pos))
+                   (vlf-shift-undo-list del-length))))
               ((< start vlf-start-pos)
                (let ((edit-end-pos (point-max)))
                  (goto-char edit-end-pos)
@@ -588,8 +590,7 @@ Return t if move hasn't been canceled."
      (erase-buffer)
      (insert-file-contents buffer-file-name nil
                            vlf-start-pos vlf-end-pos)
-     (let ((shifts (vlf-adjust-chunk vlf-start-pos vlf-end-pos t
-                                     t)))
+     (let ((shifts (vlf-adjust-chunk vlf-start-pos vlf-end-pos t t)))
        (setq vlf-start-pos (- vlf-start-pos (car shifts))
              vlf-end-pos (+ vlf-end-pos (cdr shifts)))
        (goto-char (or (byte-to-position (+ pos (car shifts)))
@@ -598,8 +599,8 @@ Return t if move hasn't been canceled."
   (setq buffer-undo-list nil)
   (set-visited-file-modtime))
 
-(defun vlf-adjust-chunk (start end &optional adjust-start adjust-end
-                               position)
+(defun vlf-adjust-chunk (start end adjust-start adjust-end
+                               &optional position)
   "Adjust chunk at absolute START to END till content can be\
 properly decoded.  ADJUST-START determines if trying to prepend bytes\
  to the beginning, ADJUST-END - append to the end.
