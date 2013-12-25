@@ -79,6 +79,16 @@ Possible values are: nil to never use it;
 continuously recenter.")
 (put 'vlf-follow-timer 'permanent-local t)
 
+(defconst vlf-partial-decode-shown
+  (cond ((< emacs-major-version 24) t)
+        ((< 24 emacs-major-version) nil)
+        (t ;; TODO: use (< emacs-minor-version 4) after 24.4 release
+         (string-lessp emacs-version "24.3.5")))
+  "Indicates whether partial decode codes are displayed.")
+
+(defconst vlf-min-chunk-size 8
+  "Minimal number of bytes that can be properly decoded.")
+
 (defvar vlf-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "n" 'vlf-next-batch)
@@ -428,111 +438,210 @@ When given MINIMAL flag, skip non important operations."
 (defun vlf-move-to-chunk (start end &optional minimal)
   "Move to chunk determined by START END.
 When given MINIMAL flag, skip non important operations.
-If same as current chunk is requested, do nothing."
+If same as current chunk is requested, do nothing.
+Return number of bytes moved back for proper decoding and number of
+bytes added to the end."
   (unless (and (= start vlf-start-pos)
                (= end vlf-end-pos))
     (vlf-verify-size)
-    (if (vlf-move-to-chunk-1 start end)
-        (or minimal (vlf-update-buffer-name)))))
+    (let ((shifts (vlf-move-to-chunk-1 start end)))
+      (and shifts (not minimal)
+           (vlf-update-buffer-name))
+      shifts)))
 
 (defun vlf-move-to-chunk-1 (start end)
   "Move to chunk determined by START END keeping as much edits if any.
-Return t if move hasn't been canceled."
-  (let ((modified (buffer-modified-p))
-        (start (max 0 start))
-        (end (min end vlf-file-size))
-        (edit-end (+ (position-bytes (point-max)) vlf-start-pos)))
+Return number of bytes moved back for proper decoding and number of
+bytes added to the end."
+  (let* ((modified (buffer-modified-p))
+         (start (max 0 start))
+         (end (min end vlf-file-size))
+         (edit-end (if modified
+                       (+ vlf-start-pos
+                          (length (encode-coding-region
+                                   (point-min) (point-max)
+                                   buffer-file-coding-system t)))
+                     vlf-end-pos)))
     (cond
      ((and (= start vlf-start-pos) (= end edit-end))
-      (unless modified
-        (vlf-move-to-chunk-2 start end)
-        t))
+      (or modified (vlf-move-to-chunk-2 start end)))
      ((or (<= edit-end start) (<= end vlf-start-pos))
       (when (or (not modified)
                 (y-or-n-p "Chunk modified, are you sure? ")) ;full chunk renewal
         (set-buffer-modified-p nil)
-        (vlf-move-to-chunk-2 start end)
-        t))
+        (vlf-move-to-chunk-2 start end)))
      ((or (and (<= start vlf-start-pos) (<= edit-end end))
           (not modified)
           (y-or-n-p "Chunk modified, are you sure? "))
-      (let ((pos (+ (position-bytes (point)) vlf-start-pos))
-            (shift-start 0)
-            (shift-end 0)
-            (inhibit-read-only t))
-        (cond ((< end edit-end)
-               (let* ((del-pos (1+ (byte-to-position
-                                    (- end vlf-start-pos))))
-                      (del-len (length (encode-coding-region
-                                        del-pos (point-max)
-                                        buffer-file-coding-system
-                                        t))))
-                 (setq end (- (if (zerop vlf-end-pos)
-                                  vlf-file-size
-                                vlf-end-pos)
-                              del-len))
+      (let ((shift-start 0)
+            (shift-end 0))
+        (let ((pos (+ (position-bytes (point)) vlf-start-pos))
+              (inhibit-read-only t))
+          (cond ((< end edit-end)
+                 (let* ((del-pos (1+ (byte-to-position
+                                      (- end vlf-start-pos))))
+                        (del-len (length (encode-coding-region
+                                          del-pos (point-max)
+                                          buffer-file-coding-system
+                                          t))))
+                   (setq end (- (if (zerop vlf-end-pos)
+                                    vlf-file-size
+                                  vlf-end-pos)
+                                del-len))
+                   (vlf-with-undo-disabled
+                    (delete-region del-pos (point-max)))))
+                ((< edit-end end)
                  (vlf-with-undo-disabled
-                  (delete-region del-pos (point-max)))))
-              ((< edit-end end)
-               (let ((edit-end-pos (point-max)))
-                 (goto-char edit-end-pos)
-                 (vlf-with-undo-disabled
-                  (insert-file-contents buffer-file-name nil
-                                        vlf-end-pos end)
-                  (setq shift-end (cdr (vlf-adjust-chunk
+                  (setq shift-end (cdr (vlf-insert-file-contents
                                         vlf-end-pos end nil t
-                                        edit-end-pos)))))))
-        (cond ((< vlf-start-pos start)
-               (let* ((del-pos (1+ (byte-to-position
-                                    (- start vlf-start-pos))))
-                      (del-len (length (encode-coding-region
-                                        (point-min) del-pos
-                                        buffer-file-coding-system
-                                        t))))
-                 (setq start (+ vlf-start-pos del-len))
-                 (vlf-with-undo-disabled
-                  (delete-region (point-min) del-pos))))
-              ((< start vlf-start-pos)
-               (let ((edit-end-pos (point-max)))
-                 (goto-char edit-end-pos)
-                 (vlf-with-undo-disabled
-                  (insert-file-contents buffer-file-name nil
-                                        start vlf-start-pos)
-                  (setq shift-start (car
-                                     (vlf-adjust-chunk start
-                                                       vlf-start-pos
-                                                       t nil
-                                                       edit-end-pos)))
-                  (goto-char (point-min))
-                  (insert (delete-and-extract-region edit-end-pos
-                                                     (point-max)))))))
-        (setq start (- start shift-start))
-        (goto-char (or (byte-to-position (- pos start))
-                       (byte-to-position (- pos vlf-start-pos))
-                       (point-max)))
-        (setq vlf-start-pos start
-              vlf-end-pos (+ end shift-end)))
-      (set-buffer-modified-p modified)
-      t))))
+                                        (point-max)))))))
+          (cond ((< vlf-start-pos start)
+                 (let* ((del-pos (1+ (byte-to-position
+                                      (- start vlf-start-pos))))
+                        (del-len (length (encode-coding-region
+                                          (point-min) del-pos
+                                          buffer-file-coding-system
+                                          t))))
+                   (setq start (+ vlf-start-pos del-len))
+                   (vlf-with-undo-disabled
+                    (delete-region (point-min) del-pos))))
+                ((< start vlf-start-pos)
+                 (let ((edit-end-pos (point-max)))
+                   (vlf-with-undo-disabled
+                    (setq shift-start (car (vlf-insert-file-contents
+                                            start vlf-start-pos
+                                            t nil edit-end-pos)))
+                    (goto-char (point-min))
+                    (insert (delete-and-extract-region edit-end-pos
+                                                       (point-max)))))))
+          (setq start (- start shift-start))
+          (goto-char (or (byte-to-position (- pos start))
+                         (byte-to-position (- pos vlf-start-pos))
+                         (point-max)))
+          (setq vlf-start-pos start
+                vlf-end-pos (+ end shift-end)))
+        (set-buffer-modified-p modified)
+        (cons shift-start shift-end))))))
 
 (defun vlf-move-to-chunk-2 (start end)
-  "Unconditionally move to chunk determined by START END."
+  "Unconditionally move to chunk determined by START END.
+Return number of bytes moved back for proper decoding and number of
+bytes added to the end."
   (setq vlf-start-pos (max 0 start)
         vlf-end-pos (min end vlf-file-size))
-  (let ((inhibit-read-only t)
-        (pos (position-bytes (point))))
-    (vlf-with-undo-disabled
-     (erase-buffer)
-     (insert-file-contents buffer-file-name nil
-                           vlf-start-pos vlf-end-pos)
-     (let ((shifts (vlf-adjust-chunk vlf-start-pos vlf-end-pos t
-                                     t)))
-       (setq vlf-start-pos (- vlf-start-pos (car shifts))
+  (let (shifts)
+    (let ((inhibit-read-only t)
+          (pos (position-bytes (point))))
+      (vlf-with-undo-disabled
+       (erase-buffer)
+       (setq shifts (vlf-insert-file-contents vlf-start-pos
+                                              vlf-end-pos t t)
+             vlf-start-pos (- vlf-start-pos (car shifts))
              vlf-end-pos (+ vlf-end-pos (cdr shifts)))
        (goto-char (or (byte-to-position (+ pos (car shifts)))
-                      (point-max))))))
-  (set-buffer-modified-p nil)
-  (set-visited-file-modtime))
+                      (point-max)))))
+    (set-buffer-modified-p nil)
+    (set-visited-file-modtime)
+    shifts))
+
+(defun vlf-insert-file-contents (start end adjust-start adjust-end
+                                       &optional position)
+  "Adjust chunk at absolute START to END till content can be\
+properly decoded.  ADJUST-START determines if trying to prepend bytes\
+ to the beginning, ADJUST-END - append to the end.
+Use buffer POSITION as start if given.
+Return number of bytes moved back for proper decoding and number of
+bytes added to the end."
+  (setq adjust-start (and adjust-start (not (zerop start)))
+        adjust-end (and adjust-end (< end vlf-file-size))
+        position (or position (point-min)))
+  (let ((shift-start 0)
+        (shift-end 0))
+    (if adjust-start
+        (setq shift-start (vlf-adjust-start start end position
+                                            adjust-end)
+              start (- start shift-start))
+      (vlf-insert-content-safe start end position))
+    (if adjust-end
+        (setq shift-end (vlf-adjust-end start end position)))
+    (cons shift-start shift-end)))
+
+(defun vlf-adjust-start (start end position adjust-end)
+  "Adjust chunk beginning at absolute START to END till content can\
+be properly decoded.  Use buffer POSITION as start.
+ADJUST-END is non-nil if end would be adjusted later.
+Return number of bytes moved back for proper decoding."
+  (let* ((shift 0)
+         (min-end (min end (+ start vlf-min-chunk-size)))
+         (chunk-size (- min-end start))
+         (strict (and (not adjust-end) (= min-end end))))
+    (vlf-insert-content-safe start min-end position)
+    (while (and (not (zerop start))
+                (< shift 3)
+                (or (= position (point-max))
+                    (let ((diff (- chunk-size
+                                   (length
+                                    (encode-coding-region
+                                     position (point-max)
+                                     buffer-file-coding-system t)))))
+                      (and (not (zerop diff))
+                           (cond (strict t)
+                                 (vlf-partial-decode-shown
+                                  (or (< diff -3) (< 0 diff)))
+                                 (t (or (< diff 0) (< 3 diff))))))))
+      (setq shift (1+ shift)
+            start (1- start)
+            chunk-size (1+ chunk-size))
+      (delete-region position (point-max))
+      (vlf-insert-content-safe start min-end position))
+    (unless (= min-end end)
+      (delete-region position (point-max))
+      (insert-file-contents buffer-file-name nil start end))
+    shift))
+
+(defun vlf-adjust-end (start end position)
+  "Adjust chunk end at absolute START to END till content can be\
+properly decoded starting at POSITION.
+Return number of bytes added for proper decoding."
+  (let ((shift 0)
+        (new-pos (max position (- (point-max) vlf-min-chunk-size))))
+    (if (< position new-pos)
+        (setq start (+ start (length (encode-coding-region
+                                      position new-pos
+                                      buffer-file-coding-system t)))
+              position new-pos))
+    (if vlf-partial-decode-shown
+        (let ((chunk-size (- end start)))
+          (goto-char (point-max))
+          (while (and (< end vlf-file-size)
+                      (< shift 3)
+                      (or (= position (point-max))
+                          (if vlf-partial-decode-shown
+                              (eq (char-charset (preceding-char))
+                                  'eight-bit))
+                          (/= chunk-size
+                              (length (encode-coding-region
+                                       position (point-max)
+                                       buffer-file-coding-system
+                                       t)))))
+            (setq shift (1+ shift)
+                  end (1+ end)
+                  chunk-size (1+ chunk-size))
+            (delete-region position (point-max))
+            (vlf-insert-content-safe start end position))))
+    shift))
+
+(defun vlf-insert-content-safe (start end position)
+  "Insert file content from absolute START to END of file at\
+POSITION.  Clean up if no characters are inserted."
+  (goto-char position)
+  (let ((tiny (and (not vlf-partial-decode-shown)
+                   (< (- end start) 4))))
+    (if tiny (insert "|"))
+    (cond ((zerop (cadr (insert-file-contents buffer-file-name
+                                              nil start end)))
+           (delete-region position (point-max)))
+          (tiny (delete-region position (1+ position))))))
 
 (defun vlf-adjust-chunk (start end &optional adjust-start adjust-end
                                position)
@@ -542,6 +651,8 @@ properly decoded.  ADJUST-START determines if trying to prepend bytes\
 Use buffer POSITION as start if given.
 Return number of bytes moved back for proper decoding and number of
 bytes added to the end."
+  (if position (goto-char position))
+  (insert-file-contents buffer-file-name nil start end)
   (let ((shift-start 0)
         (shift-end 0))
     (if adjust-start
@@ -612,7 +723,8 @@ This seems to be the case with GNU/Emacs before 24.4."
            (vlf-move-to-batch (- current-pos half-batch))
            (and (< half-batch current-pos)
                 (< half-batch (- vlf-file-size current-pos))
-                (goto-char (byte-to-position half-batch)))))))
+                (goto-char (byte-to-position (- current-pos
+                                                vlf-start-pos))))))))
 
 (defun vlf-stop-following ()
   "Stop continuous recenter."
