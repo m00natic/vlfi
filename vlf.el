@@ -491,10 +491,13 @@ bytes added to the end."
                    (vlf-with-undo-disabled
                     (delete-region del-pos (point-max)))))
                 ((< edit-end end)
-                 (vlf-with-undo-disabled
-                  (setq shift-end (cdr (vlf-insert-file-contents
-                                        vlf-end-pos end nil t
-                                        (point-max)))))))
+                 (if (and (not vlf-partial-decode-shown)
+                          (< (- end vlf-end-pos) 4))
+                     (setq end vlf-end-pos)
+                   (vlf-with-undo-disabled
+                    (setq shift-end (cdr (vlf-insert-file-contents
+                                          vlf-end-pos end nil t
+                                          (point-max))))))))
           (cond ((< vlf-start-pos start)
                  (let* ((del-pos (1+ (byte-to-position
                                       (- start vlf-start-pos))))
@@ -506,14 +509,17 @@ bytes added to the end."
                    (vlf-with-undo-disabled
                     (delete-region (point-min) del-pos))))
                 ((< start vlf-start-pos)
-                 (let ((edit-end-pos (point-max)))
-                   (vlf-with-undo-disabled
-                    (setq shift-start (car (vlf-insert-file-contents
-                                            start vlf-start-pos
-                                            t nil edit-end-pos)))
-                    (goto-char (point-min))
-                    (insert (delete-and-extract-region edit-end-pos
-                                                       (point-max)))))))
+                 (if (and (not vlf-partial-decode-shown)
+                          (< (- vlf-start-pos start) 4))
+                     (setq start vlf-start-pos)
+                   (let ((edit-end-pos (point-max)))
+                     (vlf-with-undo-disabled
+                      (setq shift-start (car (vlf-insert-file-contents
+                                              start vlf-start-pos
+                                              t nil edit-end-pos)))
+                      (goto-char (point-min))
+                      (insert (delete-and-extract-region
+                               edit-end-pos (point-max))))))))
           (setq start (- start shift-start))
           (goto-char (or (byte-to-position (- pos start))
                          (byte-to-position (- pos vlf-start-pos))
@@ -575,8 +581,9 @@ ADJUST-END is non-nil if end would be adjusted later.
 Return number of bytes moved back for proper decoding."
   (let* ((min-end (min end (+ start vlf-min-chunk-size)))
          (chunk-size (- min-end start))
+         (strict (and (not adjust-end) (= min-end end)))
          (shift (vlf-insert-content-safe start min-end position t)))
-    (setq start (+ start shift))
+    (setq start (- start shift))
     (while (and (not (zerop start))
                 (< shift 3)
                 (let ((diff (- chunk-size
@@ -584,7 +591,7 @@ Return number of bytes moved back for proper decoding."
                                 (encode-coding-region
                                  position (point-max)
                                  buffer-file-coding-system t)))))
-                  (cond ((not adjust-end) (not (zerop diff)))
+                  (cond (strict (not (zerop diff)))
                         (vlf-partial-decode-shown
                          (or (< diff -3) (< 0 diff)))
                         (t (or (< diff 0) (< 3 diff))))))
