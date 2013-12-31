@@ -561,9 +561,11 @@ bytes added to the end."
         (setq shift-start (vlf-adjust-start start end position
                                             adjust-end)
               start (- start shift-start))
-      (vlf-insert-content-safe start end position))
+      (setq shift-end (vlf-insert-content-safe start end position)
+            end (+ end shift-end)))
     (if adjust-end
-        (setq shift-end (vlf-adjust-end start end position)))
+        (setq shift-end (+ shift-end
+                           (vlf-adjust-end start end position))))
     (cons shift-start shift-end)))
 
 (defun vlf-adjust-start (start end position adjust-end)
@@ -571,29 +573,26 @@ bytes added to the end."
 be properly decoded.  Use buffer POSITION as start.
 ADJUST-END is non-nil if end would be adjusted later.
 Return number of bytes moved back for proper decoding."
-  (let* ((shift 0)
-         (min-end (min end (+ start vlf-min-chunk-size)))
+  (let* ((min-end (min end (+ start vlf-min-chunk-size)))
          (chunk-size (- min-end start))
-         (strict (and (not adjust-end) (= min-end end))))
-    (vlf-insert-content-safe start min-end position)
+         (shift (vlf-insert-content-safe start min-end position t)))
+    (setq start (+ start shift))
     (while (and (not (zerop start))
                 (< shift 3)
-                (or (= position (point-max))
-                    (let ((diff (- chunk-size
-                                   (length
-                                    (encode-coding-region
-                                     position (point-max)
-                                     buffer-file-coding-system t)))))
-                      (and (not (zerop diff))
-                           (cond (strict t)
-                                 (vlf-partial-decode-shown
-                                  (or (< diff -3) (< 0 diff)))
-                                 (t (or (< diff 0) (< 3 diff))))))))
+                (let ((diff (- chunk-size
+                               (length
+                                (encode-coding-region
+                                 position (point-max)
+                                 buffer-file-coding-system t)))))
+                  (cond ((not adjust-end) (not (zerop diff)))
+                        (vlf-partial-decode-shown
+                         (or (< diff -3) (< 0 diff)))
+                        (t (or (< diff 0) (< 3 diff))))))
       (setq shift (1+ shift)
             start (1- start)
             chunk-size (1+ chunk-size))
       (delete-region position (point-max))
-      (vlf-insert-content-safe start min-end position))
+      (insert-file-contents buffer-file-name nil start min-end))
     (unless (= min-end end)
       (delete-region position (point-max))
       (insert-file-contents buffer-file-name nil start end))
@@ -603,93 +602,53 @@ Return number of bytes moved back for proper decoding."
   "Adjust chunk end at absolute START to END till content can be\
 properly decoded starting at POSITION.
 Return number of bytes added for proper decoding."
-  (let ((shift 0)
-        (new-pos (max position (- (point-max) vlf-min-chunk-size))))
-    (if (< position new-pos)
-        (setq start (+ start (length (encode-coding-region
-                                      position new-pos
-                                      buffer-file-coding-system t)))
-              position new-pos))
+  (let ((shift 0))
     (if vlf-partial-decode-shown
-        (let ((chunk-size (- end start)))
-          (goto-char (point-max))
-          (while (and (< end vlf-file-size)
-                      (< shift 3)
-                      (or (= position (point-max))
-                          (if vlf-partial-decode-shown
-                              (eq (char-charset (preceding-char))
-                                  'eight-bit))
-                          (/= chunk-size
-                              (length (encode-coding-region
-                                       position (point-max)
-                                       buffer-file-coding-system
-                                       t)))))
-            (setq shift (1+ shift)
-                  end (1+ end)
-                  chunk-size (1+ chunk-size))
-            (delete-region position (point-max))
-            (vlf-insert-content-safe start end position))))
+        (let ((new-pos (max position
+                            (- (point-max) vlf-min-chunk-size))))
+          (if (< position new-pos)
+              (setq start (+ start (length (encode-coding-region
+                                            position new-pos
+                                            buffer-file-coding-system
+                                            t)))
+                    position new-pos))))
+    (let ((chunk-size (- end start)))
+      (goto-char (point-max))
+      (while (and (< shift 3)
+                  (< end vlf-file-size)
+                  (or (eq (char-charset (preceding-char)) 'eight-bit)
+                      (/= chunk-size
+                          (length (encode-coding-region
+                                   position (point-max)
+                                   buffer-file-coding-system t)))))
+        (setq shift (1+ shift)
+              end (1+ end)
+              chunk-size (1+ chunk-size))
+        (delete-region position (point-max))
+        (insert-file-contents buffer-file-name nil start end)
+        (goto-char (point-max))))
     shift))
 
-(defun vlf-insert-content-safe (start end position)
+(defun vlf-insert-content-safe (start end position &optional shift-start)
   "Insert file content from absolute START to END of file at\
-POSITION.  Clean up if no characters are inserted."
+POSITION.  Adjust start if SHIFT-START is non nil, end otherwise.
+Clean up if no characters are inserted."
   (goto-char position)
-  (let ((tiny (and (not vlf-partial-decode-shown)
-                   (< (- end start) 4))))
-    (if tiny (insert "|"))
-    (cond ((zerop (cadr (insert-file-contents buffer-file-name
-                                              nil start end)))
-           (delete-region position (point-max)))
-          (tiny (delete-region position (1+ position))))))
-
-(defun vlf-adjust-chunk (start end &optional adjust-start adjust-end
-                               position)
-  "Adjust chunk at absolute START to END till content can be\
-properly decoded.  ADJUST-START determines if trying to prepend bytes\
- to the beginning, ADJUST-END - append to the end.
-Use buffer POSITION as start if given.
-Return number of bytes moved back for proper decoding and number of
-bytes added to the end."
-  (if position (goto-char position))
-  (insert-file-contents buffer-file-name nil start end)
-  (let ((shift-start 0)
-        (shift-end 0))
-    (if adjust-start
-        (let ((position (or position (point-min)))
-              (chunk-size (- end start)))
-          (while (and (not (zerop start))
-                      (< shift-start 4)
-                      (< 4 (abs (- chunk-size
-                                   (length (encode-coding-region
-                                            position (point-max)
-                                            buffer-file-coding-system
-                                            t))))))
-            (setq shift-start (1+ shift-start)
-                  start (1- start)
-                  chunk-size (1+ chunk-size))
-            (delete-region position (point-max))
-            (goto-char position)
-            (insert-file-contents buffer-file-name nil start end))))
-    (if adjust-end
-        (cond ((vlf-partial-decode-shown-p) ;remove raw bytes from end
-               (goto-char (point-max))
-               (while (eq (char-charset (preceding-char)) 'eight-bit)
-                 (setq shift-end (1- shift-end))
-                 (delete-char -1)))
-              ((< end vlf-file-size) ;add bytes until new character is displayed
-               (let ((position (or position (point-min)))
-                     (expected-size (buffer-size)))
-                 (while (and (progn
-                               (setq shift-end (1+ shift-end)
-                                     end (1+ end))
-                               (delete-region position (point-max))
-                               (goto-char position)
-                               (insert-file-contents buffer-file-name
-                                                     nil start end)
-                               (< end vlf-file-size))
-                             (= expected-size (buffer-size))))))))
-    (cons shift-start shift-end)))
+  (let ((shift 0))
+    (while (and (< shift 3)
+                (zerop (cadr (insert-file-contents buffer-file-name
+                                                   nil start end)))
+                (if shift-start
+                    (not (zerop start))
+                  (< end vlf-file-size)))
+      ;; TODO: this seems like regression after Emacs 24.3
+      (message "Buffer content may be broken")
+      (setq shift (1+ shift))
+      (if shift-start
+          (setq start (1- start))
+        (setq end (1+ end)))
+      (delete-region position (point-max)))
+    shift))
 
 (defun vlf-partial-decode-shown-p ()
   "Determine if partial decode codes are displayed.
