@@ -86,7 +86,7 @@ continuously recenter.")
          (string-lessp emacs-version "24.3.5")))
   "Indicates whether partial decode codes are displayed.")
 
-(defconst vlf-min-chunk-size 8
+(defconst vlf-min-chunk-size 16
   "Minimal number of bytes that can be properly decoded.")
 
 (defvar vlf-mode-map
