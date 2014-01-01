@@ -36,8 +36,8 @@ editing, search and indexing.
 ** 32-bit GNU Emacs
 
 Regular Emacs integers are used, so if you use 32-bit Emacs without
-bignum support and have really huge file (with size beyond the maximum
-integer value), VLF will probably not quite work.
+bignum support, VLF will not work with files over 512 MB (maximum
+integer value).
 
 ** Memory control
 
@@ -98,13 +98,8 @@ the end.
 
 ** Follow point
 
-Intelligent continuous recenter around point in current buffer can be
-enabled with:
-
-*M-x vlf-start-following*
-
-You are asked for number of idle seconds interval for automatic
-update.  To cancel following invoke *M-x vlf-stop-following*.
+Continuous chunk recenter around point in current buffer can be
+toggled with *C-c C-v f*.
 
 ** Search whole file
 
