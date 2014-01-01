@@ -59,6 +59,20 @@ that vlf-mode automatically launches for large files:
  '(vlf-application 'dont-ask))
 #+END_EXAMPLE
 
+*** Disable for specific mode
+
+To disable automatic usage of VLF for a major mode, add it to
+*vlf-forbidden-modes-list*.
+
+*** Disable for specific function
+
+To disable automatic usage of VLF for a function, for example named
+*func* defined in file *file.el*:
+
+#+BEGIN_EXAMPLE
+(vlf-disable-for-function func "file.el")
+#+END_EXAMPLE
+
 ** Keymap
 
 All VLF operations are grouped under the *C-c C-v* prefix by default.
