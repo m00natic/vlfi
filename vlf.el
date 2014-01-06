@@ -149,6 +149,7 @@ You can customize number of bytes displayed by customizing
   (with-current-buffer (generate-new-buffer "*vlf*")
     (set-visited-file-name file)
     (set-buffer-modified-p nil)
+    (setq buffer-file-coding-system nil)
     (vlf-mode 1)
     (switch-to-buffer (current-buffer))))
 
