@@ -52,8 +52,7 @@ Save anyway? "))
              (let ((pos (point)))
                (if (< 0 size-change)
                    (vlf-file-shift-back size-change)
-                 (vlf-file-shift-forward (- size-change))
-                 (vlf-verify-size))
+                 (vlf-file-shift-forward (- size-change)))
                (vlf-move-to-chunk-2 vlf-start-pos
                                     (if (< (- vlf-end-pos vlf-start-pos)
                                            vlf-batch-size)
@@ -78,7 +77,7 @@ Save anyway? "))
        (progress-reporter-update reporter read-start-pos))
      ;; pad end with space
      (erase-buffer)
-     (vlf-verify-size)
+     (vlf-verify-size t)
      (insert-char 32 size-change))
     (write-region nil nil buffer-file-name (- vlf-file-size
                                               size-change) t)
@@ -88,7 +87,7 @@ Save anyway? "))
   "Read `vlf-batch-size' bytes from READ-POS and write them \
 back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
   (erase-buffer)
-  (vlf-verify-size)
+  (vlf-verify-size t)
   (let ((read-end (+ read-pos vlf-batch-size)))
     (insert-file-contents-literally buffer-file-name nil
                                     read-pos
@@ -122,7 +121,7 @@ Done by saving content up front and then writing previous batch."
 Then write initial buffer content to file at WRITE-POS.
 If HIDE-READ is non nil, temporarily hide literal read content.
 Return nil if EOF is reached, t otherwise."
-  (vlf-verify-size)
+  (vlf-verify-size t)
   (let ((read-more (< read-pos vlf-file-size))
         (start-write-pos (point-min))
         (end-write-pos (point-max)))

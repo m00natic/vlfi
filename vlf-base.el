@@ -22,7 +22,8 @@
 ;; Boston, MA 02111-1307, USA.
 
 ;;; Commentary:
-;; This package provides basic chunk operations for VLF
+;; This package provides basic chunk operations for VLF,
+;; most notable being the `vlf-move-to-chunk' function.
 
 ;;; Code:
 
@@ -35,11 +36,38 @@
         (t ;; TODO: use (< emacs-minor-version 4) after 24.4 release
          (string-lessp emacs-version "24.3.5")))
   "Indicates whether partial decode codes are displayed.")
+(defun vlf-get-file-size (file)
+  "Get size in bytes of FILE."
+  (or (nth 7 (file-attributes file)) 0))
+
+(defun vlf-verify-size (&optional update-visited-time)
+  "Update file size information if necessary and visited file time.
+If non-nil, UPDATE-VISITED-TIME."
+  (unless (verify-visited-file-modtime (current-buffer))
+    (setq vlf-file-size (vlf-get-file-size buffer-file-truename))
+    (if update-visited-time
+        (set-visited-file-modtime))))
+
 (unless (fboundp 'file-size-human-readable)
   (defun file-size-human-readable (file-size)
     "Print FILE-SIZE in MB."
     (format "%.3fMB" (/ file-size 1048576.0))))
 
+(defun vlf-update-buffer-name ()
+  "Update the current buffer name."
+  (rename-buffer (format "%s(%d/%d)[%s]"
+                         (file-name-nondirectory buffer-file-name)
+                         (/ vlf-end-pos vlf-batch-size)
+                         (/ vlf-file-size vlf-batch-size)
+                         (file-size-human-readable vlf-batch-size))
+                 t))
+
+(defmacro vlf-with-undo-disabled (&rest body)
+  "Execute BODY with temporarily disabled undo."
+  `(let ((undo-list buffer-undo-list))
+     (setq buffer-undo-list t)
+     (unwind-protect (progn ,@body)
+       (setq buffer-undo-list undo-list))))
 
 (defun vlf-move-to-chunk (start end &optional minimal)
   "Move to chunk determined by START END.
@@ -69,13 +97,14 @@ bytes added to the end."
                                    buffer-file-coding-system t)))
                      vlf-end-pos)))
     (cond
-     ((and (= start vlf-start-pos) (= end edit-end))
-      (or modified (vlf-move-to-chunk-2 start end)))
-     ((or (<= edit-end start) (<= end vlf-start-pos))
+     ((or (< edit-end start) (< end vlf-start-pos)
+          (not (verify-visited-file-modtime (current-buffer))))
       (when (or (not modified)
                 (y-or-n-p "Chunk modified, are you sure? ")) ;full chunk renewal
         (set-buffer-modified-p nil)
         (vlf-move-to-chunk-2 start end)))
+     ((and (= start vlf-start-pos) (= end edit-end))
+      (or modified (vlf-move-to-chunk-2 start end)))
      ((or (and (<= start vlf-start-pos) (<= edit-end end))
           (not modified)
           (y-or-n-p "Chunk modified, are you sure? "))
@@ -135,12 +164,14 @@ bytes added to the end."
           (setq vlf-start-pos start
                 vlf-end-pos (+ end shift-end)))
         (set-buffer-modified-p modified)
+        (set-visited-file-modtime)
         (cons shift-start shift-end))))))
 
 (defun vlf-move-to-chunk-2 (start end)
-  "Unconditionally move to chunk determined by START END.
+  "Unconditionally move to chunk enclosed by START END bytes.
 Return number of bytes moved back for proper decoding and number of
 bytes added to the end."
+  (vlf-verify-size t)
   (setq vlf-start-pos (max 0 start)
         vlf-end-pos (min end vlf-file-size))
   (let (shifts)
@@ -156,7 +187,6 @@ bytes added to the end."
                       (point-max)))))
     (set-buffer-modified-p nil)
     (setq buffer-undo-list nil)
-    (set-visited-file-modtime)
     shifts))
 
 (defun vlf-insert-file-contents (start end adjust-start adjust-end

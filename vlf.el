@@ -107,13 +107,6 @@
     map)
   "Prefixed keymap for `vlf-mode'.")
 
-(defmacro vlf-with-undo-disabled (&rest body)
-  "Execute BODY with temporarily disabled undo."
-  `(let ((undo-list buffer-undo-list))
-     (setq buffer-undo-list t)
-     (unwind-protect (progn ,@body)
-       (setq buffer-undo-list undo-list))))
-
 (define-minor-mode vlf-mode
   "Mode to browse large files in."
   :lighter " VLF"
@@ -189,25 +182,6 @@ with the prefix argument DECREASE it is halved."
                          (* vlf-batch-size 2)))
   (vlf-move-to-batch vlf-start-pos))
 
-(defun vlf-update-buffer-name ()
-  "Update the current buffer name."
-  (rename-buffer (format "%s(%d/%d)[%s]"
-                         (file-name-nondirectory buffer-file-name)
-                         (/ vlf-end-pos vlf-batch-size)
-                         (/ vlf-file-size vlf-batch-size)
-                         (file-size-human-readable vlf-batch-size))
-                 t))
-
-(defun vlf-get-file-size (file)
-  "Get size in bytes of FILE."
-  (or (nth 7 (file-attributes file)) 0))
-
-(defun vlf-verify-size ()
-  "Update file size information if necessary and visited file time."
-  (unless (verify-visited-file-modtime (current-buffer))
-    (setq vlf-file-size (vlf-get-file-size buffer-file-truename))
-    (set-visited-file-modtime)))
-
 (defun vlf-insert-file (&optional from-end)
   "Insert first chunk of current file contents in current buffer.
 With FROM-END prefix, start from the back."
@@ -237,7 +211,6 @@ Ask for confirmation if NOCONFIRM is nil."
             (yes-or-no-p (format "Revert buffer from file %s? "
                                  buffer-file-name)))
     (set-buffer-modified-p nil)
-    (set-visited-file-modtime)
     (vlf-move-to-chunk-2 vlf-start-pos vlf-end-pos)))
 
 (defun vlf-jump-to-chunk (n)
