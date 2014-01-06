@@ -29,6 +29,7 @@
 
 (defvar vlf-follow-timer nil
   "Contains timer if vlf buffer is set to continuously recenter.")
+(make-variable-buffer-local 'vlf-follow-timer)
 (put 'vlf-follow-timer 'permanent-local t)
 
 (defun vlf-recenter (vlf-buffer)
@@ -57,8 +58,9 @@
 
 (defun vlf-stop-follow ()
   "Stop continuous recenter."
-  (cancel-timer vlf-follow-timer)
-  (setq vlf-follow-timer nil))
+  (when vlf-follow-timer
+    (cancel-timer vlf-follow-timer)
+    (setq vlf-follow-timer nil)))
 
 (defun vlf-start-follow (interval)
   "Continuously recenter chunk around point every INTERVAL seconds."

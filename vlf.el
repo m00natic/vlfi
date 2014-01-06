@@ -51,12 +51,15 @@
 ;;; Keep track of file position.
 (defvar vlf-start-pos 0
   "Absolute position of the visible chunk start.")
+(make-variable-buffer-local 'vlf-start-pos)
 (put 'vlf-start-pos 'permanent-local t)
 
 (defvar vlf-end-pos 0 "Absolute position of the visible chunk end.")
+(make-variable-buffer-local 'vlf-end-pos)
 (put 'vlf-end-pos 'permanent-local t)
 
 (defvar vlf-file-size 0 "Total size of presented file.")
+(make-variable-buffer-local 'vlf-file-size)
 (put 'vlf-file-size 'permanent-local t)
 
 (autoload 'vlf-write "vlf-write" "Write current chunk to file.")
@@ -69,6 +72,8 @@
   "Make whole file occur style index for REGEXP.")
 (autoload 'vlf-toggle-follow "vlf-follow"
   "Toggle continuous chunk recenter around current point.")
+(autoload 'vlf-stop-follow "vlf-follow"
+  "Stop continuous recenter.")
 
 (defvar vlf-mode-map
   (let ((map (make-sparse-keymap)))
@@ -112,22 +117,19 @@
   :keymap vlf-prefix-map
   (if vlf-mode
       (progn
-        (set (make-local-variable 'require-final-newline) nil)
+        (setq-local require-final-newline nil)
         (add-hook 'write-file-functions 'vlf-write nil t)
-        (set (make-local-variable 'revert-buffer-function)
-             'vlf-revert)
+        (setq-local revert-buffer-function 'vlf-revert)
         (make-local-variable 'vlf-batch-size)
-        (set (make-local-variable 'vlf-file-size)
-             (vlf-get-file-size buffer-file-truename))
-        (set (make-local-variable 'vlf-start-pos) 0)
-        (set (make-local-variable 'vlf-end-pos) 0)
-        (set (make-local-variable 'vlf-follow-timer) nil)
+        (setq vlf-file-size (vlf-get-file-size buffer-file-truename)
+              vlf-start-pos 0
+              vlf-end-pos 0)
         (let* ((pos (position-bytes (point)))
                (start (* (/ pos vlf-batch-size) vlf-batch-size)))
           (goto-char (byte-to-position (- pos start)))
           (vlf-move-to-batch start)))
     (kill-local-variable 'revert-buffer-function)
-    (vlf-stop-following)
+    (vlf-stop-follow)
     (when (or (not large-file-warning-threshold)
               (< vlf-file-size large-file-warning-threshold)
               (y-or-n-p (format "Load whole file (%s)? "

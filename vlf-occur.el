@@ -126,7 +126,7 @@ Prematurely ending indexing will still show what's found so far."
         (with-temp-buffer
           (setq buffer-file-name file)
           (set-buffer-modified-p nil)
-          (set (make-local-variable 'vlf-batch-size) batch-size)
+          (setq-local vlf-batch-size batch-size)
           (vlf-mode 1)
           (goto-char (point-min))
           (vlf-with-undo-disabled
