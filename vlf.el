@@ -26,10 +26,12 @@
 ;; Boston, MA 02111-1307, USA.
 
 ;;; Commentary:
-;; This package provides the M-x vlf command, which visits part of a
-;; large file without loading the entire file.
-;; The buffer uses VLF mode, which defines several commands for
+;; This package provides the M-x vlf command, which visits part of
+;; large file without loading it entirely.
+;; The buffer uses VLF mode, which provides several commands for
 ;; moving around, searching and editing selected part of file.
+;; To have it offered when opening large files:
+;; (require 'vlf-integrate)
 
 ;; This package was inspired by a snippet posted by Kevin Rodgers,
 ;; showing how to use `insert-file-contents' to extract part of a
@@ -37,10 +39,12 @@
 
 ;;; Code:
 
-;;;###autoload
-(require 'vlf-integrate)
-
 (require 'vlf-base)
+
+(defgroup vlf nil
+  "View Large Files in Emacs."
+  :prefix "vlf-"
+  :group 'files)
 
 (defcustom vlf-batch-size 1024
   "Defines how large each batch of file data is (in bytes)."

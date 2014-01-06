@@ -47,7 +47,13 @@ integer value).
 
 ** Applicability
 
-You can control when vlf-mode is invoked or offered as choice with the
+To have *vlf* offered as choice when opening large files:
+
+#+BEGIN_EXAMPLE
+(require 'vlf-integrate)
+#+END_EXAMPLE
+
+You can control when vlf-mode is invoked or offered with the
 *vlf-application* customization option.  By default it will offer VLF
 when opening large files.  There are also options to never use it (you
 can still call *vlf* command explicitly); to use it without asking for
@@ -70,7 +76,7 @@ To disable automatic usage of VLF for a function, for example named
 *func* defined in file *file.el*:
 
 #+BEGIN_EXAMPLE
-(vlf-disable-for-function func "file.el")
+(vlf-disable-for-function func "file")
 #+END_EXAMPLE
 
 ** Keymap

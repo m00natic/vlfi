@@ -35,6 +35,11 @@
         (t ;; TODO: use (< emacs-minor-version 4) after 24.4 release
          (string-lessp emacs-version "24.3.5")))
   "Indicates whether partial decode codes are displayed.")
+(unless (fboundp 'file-size-human-readable)
+  (defun file-size-human-readable (file-size)
+    "Print FILE-SIZE in MB."
+    (format "%.3fMB" (/ file-size 1048576.0))))
+
 
 (defun vlf-move-to-chunk (start end &optional minimal)
   "Move to chunk determined by START END.
