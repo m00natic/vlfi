@@ -39,9 +39,6 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (add-to-list 'load-path default-directory))
-
 (require 'vlf-base)
 
 (autoload 'vlf-write "vlf-write" "Write current chunk to file.")

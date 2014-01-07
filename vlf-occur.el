@@ -27,9 +27,6 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (add-to-list 'load-path default-directory))
-
 (require 'vlf)
 
 (defvar vlf-occur-mode-map

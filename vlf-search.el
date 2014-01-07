@@ -27,9 +27,6 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (add-to-list 'load-path default-directory))
-
 (require 'vlf)
 
 (defun vlf-re-search (regexp count backward batch-step)
