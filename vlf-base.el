@@ -253,7 +253,7 @@ Return number of bytes moved back for proper decoding."
                                  buffer-file-coding-system t)))))
                   (if strict
                       (not (zerop diff))
-                    (or (< diff 0) (< 3 diff)))))
+                    (or (< diff -3) (< 0 diff)))))
       (setq shift (1+ shift)
             safe-start (1- safe-start)
             chunk-size (1+ chunk-size))
