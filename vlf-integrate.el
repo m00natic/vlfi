@@ -84,6 +84,8 @@ Possible values are: nil to never use it;
         (cadr mode)
       mode)))
 
+(autoload 'vlf "vlf" "View Large FILE in batches.")
+
 (defadvice abort-if-file-too-large (around vlf-if-file-too-large
                                            compile activate)
   "If file SIZE larger than `large-file-warning-threshold', \

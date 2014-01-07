@@ -27,6 +27,11 @@
 
 ;;; Code:
 
+(eval-when-compile
+  (add-to-list 'load-path default-directory))
+
+(require 'vlf)
+
 (defun vlf-re-search (regexp count backward batch-step)
   "Search for REGEXP COUNT number of times forward or BACKWARD.
 BATCH-STEP is amount of overlap between successive chunks."

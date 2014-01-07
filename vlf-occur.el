@@ -27,6 +27,11 @@
 
 ;;; Code:
 
+(eval-when-compile
+  (add-to-list 'load-path default-directory))
+
+(require 'vlf)
+
 (defvar vlf-occur-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "n" 'vlf-occur-next-match)
@@ -126,7 +131,7 @@ Prematurely ending indexing will still show what's found so far."
         (with-temp-buffer
           (setq buffer-file-name file)
           (set-buffer-modified-p nil)
-          (setq-local vlf-batch-size batch-size)
+          (set (make-local-variable 'vlf-batch-size) batch-size)
           (vlf-mode 1)
           (goto-char (point-min))
           (vlf-with-undo-disabled

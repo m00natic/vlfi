@@ -27,6 +27,11 @@
 
 ;;; Code:
 
+(eval-when-compile
+  (add-to-list 'load-path default-directory))
+
+(require 'vlf)
+
 (defvar vlf-follow-timer nil
   "Contains timer if vlf buffer is set to continuously recenter.")
 (make-variable-buffer-local 'vlf-follow-timer)

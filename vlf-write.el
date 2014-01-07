@@ -27,6 +27,11 @@
 
 ;;; Code:
 
+(eval-when-compile
+  (add-to-list 'load-path default-directory))
+
+(require 'vlf-base)
+
 (defun vlf-write ()
   "Write current chunk to file.  Always return true to disable save.
 If changing size of chunk, shift remaining file content."

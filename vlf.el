@@ -39,32 +39,10 @@
 
 ;;; Code:
 
+(eval-when-compile
+  (add-to-list 'load-path default-directory))
+
 (require 'vlf-base)
-
-(defgroup vlf nil
-  "View Large Files in Emacs."
-  :prefix "vlf-"
-  :group 'files)
-
-(defcustom vlf-batch-size 1024
-  "Defines how large each batch of file data is (in bytes)."
-  :group 'vlf
-  :type 'integer)
-(put 'vlf-batch-size 'permanent-local t)
-
-;;; Keep track of file position.
-(defvar vlf-start-pos 0
-  "Absolute position of the visible chunk start.")
-(make-variable-buffer-local 'vlf-start-pos)
-(put 'vlf-start-pos 'permanent-local t)
-
-(defvar vlf-end-pos 0 "Absolute position of the visible chunk end.")
-(make-variable-buffer-local 'vlf-end-pos)
-(put 'vlf-end-pos 'permanent-local t)
-
-(defvar vlf-file-size 0 "Total size of presented file.")
-(make-variable-buffer-local 'vlf-file-size)
-(put 'vlf-file-size 'permanent-local t)
 
 (autoload 'vlf-write "vlf-write" "Write current chunk to file.")
 (autoload 'vlf-re-search-forward "vlf-search"
@@ -114,9 +92,10 @@
   :keymap vlf-prefix-map
   (if vlf-mode
       (progn
-        (setq-local require-final-newline nil)
+        (set (make-local-variable 'require-final-newline) nil)
         (add-hook 'write-file-functions 'vlf-write nil t)
-        (setq-local revert-buffer-function 'vlf-revert)
+        (set (make-local-variable 'revert-buffer-function)
+             'vlf-revert)
         (make-local-variable 'vlf-batch-size)
         (setq vlf-file-size (vlf-get-file-size buffer-file-truename)
               vlf-start-pos 0
@@ -152,6 +131,36 @@ You can customize number of bytes displayed by customizing
     (setq buffer-file-coding-system nil)
     (vlf-mode 1)
     (switch-to-buffer (current-buffer))))
+
+(defun vlf-next-batch (append)
+  "Display the next batch of file data.
+When prefix argument is supplied and positive
+ jump over APPEND number of batches.
+When prefix argument is negative
+ append next APPEND number of batches to the existing buffer."
+  (interactive "p")
+  (vlf-verify-size)
+  (let* ((end (min (+ vlf-end-pos (* vlf-batch-size (abs append)))
+                   vlf-file-size))
+         (start (if (< append 0)
+                    vlf-start-pos
+                  (- end vlf-batch-size))))
+    (vlf-move-to-chunk start end)))
+
+(defun vlf-prev-batch (prepend)
+  "Display the previous batch of file data.
+When prefix argument is supplied and positive
+ jump over PREPEND number of batches.
+When prefix argument is negative
+ append previous PREPEND number of batches to the existing buffer."
+  (interactive "p")
+  (if (zerop vlf-start-pos)
+      (error "Already at BOF"))
+  (let* ((start (max 0 (- vlf-start-pos (* vlf-batch-size (abs prepend)))))
+         (end (if (< prepend 0)
+                  vlf-end-pos
+                (+ start vlf-batch-size))))
+    (vlf-move-to-chunk start end)))
 
 ;; scroll auto batching
 (defadvice scroll-up (around vlf-scroll-up
@@ -224,39 +233,6 @@ Ask for confirmation if NOCONFIRM is nil."
   (if (buffer-modified-p)
       (error "Save or discard your changes first")
     t))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; batch movement
-
-(defun vlf-next-batch (append)
-  "Display the next batch of file data.
-When prefix argument is supplied and positive
- jump over APPEND number of batches.
-When prefix argument is negative
- append next APPEND number of batches to the existing buffer."
-  (interactive "p")
-  (vlf-verify-size)
-  (let* ((end (min (+ vlf-end-pos (* vlf-batch-size (abs append)))
-                   vlf-file-size))
-         (start (if (< append 0)
-                    vlf-start-pos
-                  (- end vlf-batch-size))))
-    (vlf-move-to-chunk start end)))
-
-(defun vlf-prev-batch (prepend)
-  "Display the previous batch of file data.
-When prefix argument is supplied and positive
- jump over PREPEND number of batches.
-When prefix argument is negative
- append previous PREPEND number of batches to the existing buffer."
-  (interactive "p")
-  (if (zerop vlf-start-pos)
-      (error "Already at BOF"))
-  (let* ((start (max 0 (- vlf-start-pos (* vlf-batch-size (abs prepend)))))
-         (end (if (< prepend 0)
-                  vlf-end-pos
-                (+ start vlf-batch-size))))
-    (vlf-move-to-chunk start end)))
 
 (defun vlf-move-to-batch (start &optional minimal)
   "Move to batch determined by START.

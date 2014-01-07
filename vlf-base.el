@@ -27,6 +27,31 @@
 
 ;;; Code:
 
+(defgroup vlf nil
+  "View Large Files in Emacs."
+  :prefix "vlf-"
+  :group 'files)
+
+(defcustom vlf-batch-size 1024
+  "Defines how large each batch of file data is (in bytes)."
+  :group 'vlf
+  :type 'integer)
+(put 'vlf-batch-size 'permanent-local t)
+
+;;; Keep track of file position.
+(defvar vlf-start-pos 0
+  "Absolute position of the visible chunk start.")
+(make-variable-buffer-local 'vlf-start-pos)
+(put 'vlf-start-pos 'permanent-local t)
+
+(defvar vlf-end-pos 0 "Absolute position of the visible chunk end.")
+(make-variable-buffer-local 'vlf-end-pos)
+(put 'vlf-end-pos 'permanent-local t)
+
+(defvar vlf-file-size 0 "Total size of presented file.")
+(make-variable-buffer-local 'vlf-file-size)
+(put 'vlf-file-size 'permanent-local t)
+
 (defconst vlf-sample-size 24
   "Minimal number of bytes that can be properly decoded.")
 
