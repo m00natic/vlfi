@@ -44,6 +44,7 @@ Save anyway? "))
                                   buffer-file-truename)
                    vlf-end-pos vlf-file-size)
              (vlf-update-buffer-name))
+         (widen)
          (let* ((region-length (length (encode-coding-region
                                         (point-min) (point-max)
                                         buffer-file-coding-system t)))

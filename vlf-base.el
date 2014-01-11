@@ -106,6 +106,7 @@ bytes added to the end."
   "Move to chunk enclosed by START END keeping as much edits if any.
 Return number of bytes moved back for proper decoding and number of
 bytes added to the end."
+  (widen)
   (let* ((modified (buffer-modified-p))
          (start (max 0 start))
          (end (min end vlf-file-size))
@@ -133,8 +134,8 @@ bytes added to the end."
               (inhibit-read-only t))
           (cond ((< end edit-end)
                  (let* ((del-pos (1+ (or (byte-to-position
-					  (- end vlf-start-pos))
-					 0)))
+                                          (- end vlf-start-pos))
+                                         0)))
                         (del-len (length (encode-coding-region
                                           del-pos (point-max)
                                           buffer-file-coding-system
@@ -303,8 +304,8 @@ Return number of bytes added over expected."
     (insert-file-contents-literally buffer-file-name nil start end)
     (let ((coding-system-for-read coding))
       (decode-coding-inserted-region position (point-max)
-                                     buffer-file-name nil start end))
-    (setq buffer-file-coding-system last-coding-system-used)))
+                                     buffer-file-name nil start end)))
+  (setq buffer-file-coding-system last-coding-system-used))
 
 (defun vlf-shift-undo-list (n)
   "Shift undo list element regions by N."
