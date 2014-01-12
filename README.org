@@ -19,6 +19,7 @@ what it does in a nutshell:
 - automatic scrolling of batches
 - as VLF is minor mode, font locking and functionality of the
   respective major mode is also present
+- by batch Ediff comparison
 - VLF is added as an option when opening large files
 
 GNU Emacs 23 and 24 are supported.
@@ -147,3 +148,12 @@ file.
 If editing doesn't change size of the chunk, only this chunk is saved.
 Otherwise the remaining part of the file is adjusted batch by batch,
 so again you'd better have bigger current batch size.
+
+** By batch Ediff
+
+Use *M-x vlf-ediff-files* and *M-x vlf-ediff-buffers* to compare
+files/buffers batch by batch (batch size is queried in case of files
+or taken from the first buffer in case of buffers).  Moving after the
+last difference in current chunk searches for following one with
+difference.  The other way around if looking for difference before the
+first one.

@@ -94,13 +94,27 @@ When given MINIMAL flag, skip non important operations.
 If same as current chunk is requested, do nothing.
 Return number of bytes moved back for proper decoding and number of
 bytes added to the end."
-  (unless (and (= start vlf-start-pos)
-               (= end vlf-end-pos))
-    (vlf-verify-size)
-    (let ((shifts (vlf-move-to-chunk-1 start end)))
-      (and shifts (not minimal)
-           (vlf-update-buffer-name))
-      shifts)))
+  (vlf-verify-size)
+  (cond ((or (<= end start) (<= end 0)
+             (<= vlf-file-size start))
+         (when (or (not (buffer-modified-p))
+                   (y-or-n-p "Chunk modified, are you sure? "))
+           (erase-buffer)
+           (set-buffer-modified-p nil)
+           (let ((place (if (<= vlf-file-size start)
+                            vlf-file-size
+                          0)))
+             (setq vlf-start-pos place
+                   vlf-end-pos place)
+             (if (not minimal)
+                 (vlf-update-buffer-name))
+             (cons (- start place) (- place end)))))
+        ((or (/= start vlf-start-pos)
+             (/= end vlf-end-pos))
+         (let ((shifts (vlf-move-to-chunk-1 start end)))
+           (and shifts (not minimal)
+                (vlf-update-buffer-name))
+           shifts))))
 
 (defun vlf-move-to-chunk-1 (start end)
   "Move to chunk enclosed by START END keeping as much edits if any.
