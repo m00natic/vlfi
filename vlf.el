@@ -122,12 +122,13 @@
 You can customize number of bytes displayed by customizing
 `vlf-batch-size'."
   (interactive "fFile to open: ")
-  (with-current-buffer (generate-new-buffer "*vlf*")
+  (let ((vlf-buffer (generate-new-buffer "*vlf*")))
+    (set-buffer vlf-buffer)
     (set-visited-file-name file)
     (set-buffer-modified-p nil)
-    (setq buffer-file-coding-system nil)
     (vlf-mode 1)
-    (switch-to-buffer (current-buffer))))
+    (switch-to-buffer vlf-buffer)
+    vlf-buffer))
 
 (defun vlf-next-batch (append)
   "Display the next batch of file data.
@@ -189,26 +190,15 @@ with the prefix argument DECREASE it is halved."
                          (* vlf-batch-size 2)))
   (vlf-move-to-batch vlf-start-pos))
 
-(defun vlf-insert-file (&optional from-end)
-  "Insert first chunk of current file contents in current buffer.
-With FROM-END prefix, start from the back."
-  (let ((start 0)
-        (end vlf-batch-size))
-    (if from-end
-        (setq start (- vlf-file-size vlf-batch-size)
-              end vlf-file-size)
-      (setq end (min vlf-batch-size vlf-file-size)))
-    (vlf-move-to-chunk start end)))
-
 (defun vlf-beginning-of-file ()
   "Jump to beginning of file content."
   (interactive)
-  (vlf-insert-file))
+  (vlf-move-to-batch 0))
 
 (defun vlf-end-of-file ()
   "Jump to end of file content."
   (interactive)
-  (vlf-insert-file t))
+  (vlf-move-to-batch vlf-file-size))
 
 (defun vlf-revert (&optional _ignore-auto noconfirm)
   "Revert current chunk.  Ignore _IGNORE-AUTO.
