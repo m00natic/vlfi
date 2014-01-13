@@ -120,7 +120,8 @@
 (defun vlf (file)
   "View Large FILE in batches.
 You can customize number of bytes displayed by customizing
-`vlf-batch-size'."
+`vlf-batch-size'.
+Return newly created buffer."
   (interactive "fFile to open: ")
   (let ((vlf-buffer (generate-new-buffer "*vlf*")))
     (set-buffer vlf-buffer)
@@ -198,6 +199,7 @@ with the prefix argument DECREASE it is halved."
 (defun vlf-end-of-file ()
   "Jump to end of file content."
   (interactive)
+  (vlf-verify-size)
   (vlf-move-to-batch vlf-file-size))
 
 (defun vlf-revert (&optional _ignore-auto noconfirm)
