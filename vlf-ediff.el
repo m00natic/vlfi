@@ -99,12 +99,12 @@ respectively of difference list, runs ediff over the adjacent chunks."
 (defun vlf-next-chunk ()
   "Move to next chunk."
   (let ((new-start (+ vlf-start-pos vlf-batch-size)))
-    (vlf-move-to-chunk new-start (+ new-start vlf-batch-size))))
+    (vlf-move-to-chunk new-start (+ new-start vlf-batch-size) t)))
 
 (defun vlf-prev-chunk ()
   "Move to previous chunk."
   (let ((new-start (- vlf-start-pos vlf-batch-size)))
-    (vlf-move-to-chunk new-start (+ new-start vlf-batch-size))))
+    (vlf-move-to-chunk new-start (+ new-start vlf-batch-size) t)))
 
 (defun vlf-ediff-next (buffer-A buffer-B &optional next-func)
   "Activate ediff over the next difference in BUFFER-A and BUFFER-B.
@@ -114,10 +114,18 @@ no difference at the current ones."
   (setq buffer-A (current-buffer)) ;names change, so reference by buffer object
   (let ((end-A (= vlf-start-pos vlf-end-pos))
         (content (buffer-substring-no-properties (point-min)
-                                                 (point-max))))
+                                                 (point-max)))
+        (min-file-size vlf-file-size)
+        (is-forward (eq next-func 'vlf-next-chunk)))
     (set-buffer buffer-B)
     (setq buffer-B (current-buffer))
-    (let ((end-B (= vlf-start-pos vlf-end-pos)))
+    (setq min-file-size (min min-file-size vlf-file-size))
+    (let ((end-B (= vlf-start-pos vlf-end-pos))
+          (reporter (make-progress-reporter
+                     "Searching for difference..."
+                     (if is-forward vlf-start-pos
+                       (- min-file-size vlf-end-pos))
+                     min-file-size)))
       (while (and (or (not end-A) (not end-B))
                   (equal content (buffer-substring-no-properties
                                   (point-min) (point-max))))
@@ -127,27 +135,31 @@ no difference at the current ones."
           (funcall next-func)
           (setq content (buffer-substring-no-properties (point-min)
                                                         (point-max))
-                end-A (= vlf-start-pos vlf-end-pos))))
-      (when (and end-A end-B)
-        (message "No (more) differences")
-        (set-buffer buffer-A)
-        (if (eq next-func 'vlf-next-chunk)
-            (let ((max-file-size vlf-file-size))
-              (with-current-buffer buffer-B
-                (setq max-file-size (max max-file-size vlf-file-size))
-                (vlf-move-to-chunk (- max-file-size vlf-batch-size)
-                                   max-file-size))
-              (vlf-move-to-chunk (- max-file-size vlf-batch-size)
-                                 max-file-size))
-          (vlf-beginning-of-file)
-          (set-buffer buffer-B)
-          (vlf-beginning-of-file))))
+                end-A (= vlf-start-pos vlf-end-pos)))
+        (progress-reporter-update reporter
+                                  (if is-forward vlf-end-pos
+                                    (- vlf-file-size vlf-start-pos))))
+      (progress-reporter-done reporter)
+      (cond ((or (not end-A) (not end-B))
+             (vlf-update-buffer-name)
+             (set-buffer buffer-A)
+             (vlf-update-buffer-name))
+            (is-forward                 ;end of both files
+             (let ((max-file-size vlf-file-size))
+               (with-current-buffer buffer-A
+                 (setq max-file-size (max max-file-size vlf-file-size))
+                 (vlf-move-to-chunk (- max-file-size vlf-batch-size)
+                                    max-file-size))
+               (vlf-move-to-chunk (- max-file-size vlf-batch-size)
+                                  max-file-size)))
+            (t (vlf-beginning-of-file)
+               (set-buffer buffer-A)
+               (vlf-beginning-of-file))))
     (ediff-buffers buffer-A buffer-B
                    `((lambda () (setq vlf-ediff-session t)
                        (if (< 0 ediff-number-of-differences)
                            (ediff-jump-to-difference
-                            ,(if (eq next-func 'vlf-next-chunk) 1
-                               -1))))))))
+                            ,(if is-forward 1 -1))))))))
 
 (defadvice ediff-next-difference (around vlf-ediff-next-difference
                                          compile activate)
