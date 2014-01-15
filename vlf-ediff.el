@@ -59,7 +59,11 @@ respectively of difference list, runs ediff over the adjacent chunks."
     (setq buffer-B (current-buffer))
     (setq vlf-batch-size vlf-size))
   (vlf-beginning-of-file)
-  (vlf-ediff-next buffer-A buffer-B 'vlf-next-chunk))
+  (vlf-ediff-next buffer-A buffer-B 'vlf-next-chunk)
+  (ediff-buffers buffer-A buffer-B
+                 '((lambda () (setq vlf-ediff-session t)
+                     (if (< 0 ediff-number-of-differences)
+                         (ediff-jump-to-difference 1))))))
 
 ;;;###autoload
 (defun vlf-ediff-files (file-A file-B batch-size)
@@ -107,7 +111,7 @@ respectively of difference list, runs ediff over the adjacent chunks."
     (vlf-move-to-chunk new-start (+ new-start vlf-batch-size) t)))
 
 (defun vlf-ediff-next (buffer-A buffer-B &optional next-func)
-  "Activate ediff over the next difference in BUFFER-A and BUFFER-B.
+  "Find next pair of chunks that differ in BUFFER-A and BUFFER-B.
 NEXT-FUNC is used to jump to the next logical chunks in case there is
 no difference at the current ones."
   (set-buffer buffer-A)
@@ -118,8 +122,8 @@ no difference at the current ones."
         (min-file-size vlf-file-size)
         (is-forward (eq next-func 'vlf-next-chunk)))
     (set-buffer buffer-B)
-    (setq buffer-B (current-buffer))
-    (setq min-file-size (min min-file-size vlf-file-size))
+    (setq buffer-B (current-buffer)
+          min-file-size (min min-file-size vlf-file-size))
     (let ((end-B (= vlf-start-pos vlf-end-pos))
           (reporter (make-progress-reporter
                      "Searching for difference..."
@@ -154,44 +158,45 @@ no difference at the current ones."
                                   max-file-size)))
             (t (vlf-beginning-of-file)
                (set-buffer buffer-A)
-               (vlf-beginning-of-file))))
-    (ediff-buffers buffer-A buffer-B
-                   `((lambda () (setq vlf-ediff-session t)
-                       (if (< 0 ediff-number-of-differences)
-                           (ediff-jump-to-difference
-                            ,(if is-forward 1 -1))))))))
+               (vlf-beginning-of-file))))))
 
 (defadvice ediff-next-difference (around vlf-ediff-next-difference
                                          compile activate)
-  "Quit ediff session, move to the next VLF chunk and search for\
-difference if at the end of difference list."
+  "Move to the next VLF chunk and search for difference if at the end\
+of difference list."
   (if (and vlf-ediff-session
            (<= (1- ediff-number-of-differences)
                ediff-current-difference))
       (let ((buffer-A ediff-buffer-A)
             (buffer-B ediff-buffer-B))
-        (ediff-really-quit nil)
-        (set-buffer buffer-A)
-        (vlf-next-chunk)
-        (set-buffer buffer-B)
-        (vlf-next-chunk)
-        (vlf-ediff-next buffer-A buffer-B 'vlf-next-chunk))
+        (save-excursion
+          (set-buffer buffer-A)
+          (vlf-next-chunk)
+          (set-buffer buffer-B)
+          (vlf-next-chunk)
+          (vlf-ediff-next buffer-A buffer-B 'vlf-next-chunk))
+        (ediff-update-diffs)
+        (if (< 0 ediff-number-of-differences)
+            (ediff-jump-to-difference 1)))
     ad-do-it))
 
 (defadvice ediff-previous-difference (around vlf-ediff-prev-difference
                                              compile activate)
-  "Quit ediff session, move to the previous VLF chunk and search for\
-difference if at the beginning of difference list."
+  "Move to the previous VLF chunk and search for difference if at the\
+beginning of difference list."
   (if (and vlf-ediff-session
            (<= ediff-current-difference 0))
       (let ((buffer-A ediff-buffer-A)
             (buffer-B ediff-buffer-B))
-        (ediff-really-quit nil)
-        (set-buffer buffer-A)
-        (vlf-prev-chunk)
-        (set-buffer buffer-B)
-        (vlf-prev-chunk)
-        (vlf-ediff-next buffer-A buffer-B 'vlf-prev-chunk))
+        (save-excursion
+          (set-buffer buffer-A)
+          (vlf-prev-chunk)
+          (set-buffer buffer-B)
+          (vlf-prev-chunk)
+          (vlf-ediff-next buffer-A buffer-B 'vlf-prev-chunk))
+        (ediff-update-diffs)
+        (if (< 0 ediff-number-of-differences)
+            (ediff-jump-to-difference -1)))
     ad-do-it))
 
 (provide 'vlf-ediff)
