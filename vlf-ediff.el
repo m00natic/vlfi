@@ -62,8 +62,9 @@ respectively of difference list, runs ediff over the adjacent chunks."
   (vlf-ediff-next buffer-A buffer-B 'vlf-next-chunk)
   (ediff-buffers buffer-A buffer-B
                  '((lambda () (setq vlf-ediff-session t)
-                     (if (< 0 ediff-number-of-differences)
-                         (ediff-jump-to-difference 1))))))
+                     (when (< 0 ediff-number-of-differences)
+                       (vlf-ediff-adjust buffer-A buffer-B t)
+                       (ediff-jump-to-difference 1))))))
 
 ;;;###autoload
 (defun vlf-ediff-files (file-A file-B batch-size)
@@ -102,13 +103,11 @@ respectively of difference list, runs ediff over the adjacent chunks."
 
 (defun vlf-next-chunk ()
   "Move to next chunk."
-  (let ((new-start (+ vlf-start-pos vlf-batch-size)))
-    (vlf-move-to-chunk new-start (+ new-start vlf-batch-size) t)))
+  (vlf-move-to-chunk vlf-end-pos (+ vlf-end-pos vlf-batch-size) t))
 
 (defun vlf-prev-chunk ()
   "Move to previous chunk."
-  (let ((new-start (- vlf-start-pos vlf-batch-size)))
-    (vlf-move-to-chunk new-start (+ new-start vlf-batch-size) t)))
+  (vlf-move-to-chunk (- vlf-start-pos vlf-batch-size) vlf-start-pos t))
 
 (defun vlf-ediff-next (buffer-A buffer-B &optional next-func)
   "Find next pair of chunks that differ in BUFFER-A and BUFFER-B.
@@ -117,38 +116,37 @@ no difference at the current ones."
   (set-buffer buffer-A)
   (setq buffer-A (current-buffer)) ;names change, so reference by buffer object
   (let ((end-A (= vlf-start-pos vlf-end-pos))
-        (content (buffer-substring-no-properties (point-min)
-                                                 (point-max)))
+        (point-max-A (point-max))
         (min-file-size vlf-file-size)
-        (is-forward (eq next-func 'vlf-next-chunk)))
+        (forward-p (eq next-func 'vlf-next-chunk)))
     (set-buffer buffer-B)
     (setq buffer-B (current-buffer)
           min-file-size (min min-file-size vlf-file-size))
     (let ((end-B (= vlf-start-pos vlf-end-pos))
           (reporter (make-progress-reporter
                      "Searching for difference..."
-                     (if is-forward vlf-start-pos
+                     (if forward-p vlf-start-pos
                        (- min-file-size vlf-end-pos))
                      min-file-size)))
       (while (and (or (not end-A) (not end-B))
-                  (equal content (buffer-substring-no-properties
-                                  (point-min) (point-max))))
+                  (zerop (compare-buffer-substrings
+                          buffer-A (point-min) point-max-A
+                          buffer-B (point-min) (point-max))))
         (funcall next-func)
         (setq end-B (= vlf-start-pos vlf-end-pos))
         (with-current-buffer buffer-A
           (funcall next-func)
-          (setq content (buffer-substring-no-properties (point-min)
-                                                        (point-max))
-                end-A (= vlf-start-pos vlf-end-pos)))
+          (setq end-A (= vlf-start-pos vlf-end-pos)
+                point-max-A (point-max)))
         (progress-reporter-update reporter
-                                  (if is-forward vlf-end-pos
+                                  (if forward-p vlf-end-pos
                                     (- vlf-file-size vlf-start-pos))))
       (progress-reporter-done reporter)
       (cond ((or (not end-A) (not end-B))
              (vlf-update-buffer-name)
              (set-buffer buffer-A)
              (vlf-update-buffer-name))
-            (is-forward                 ;end of both files
+            (forward-p                  ;end of both files
              (let ((max-file-size vlf-file-size))
                (with-current-buffer buffer-A
                  (setq max-file-size (max max-file-size vlf-file-size))
@@ -176,8 +174,10 @@ of difference list."
           (vlf-next-chunk)
           (vlf-ediff-next buffer-A buffer-B 'vlf-next-chunk))
         (ediff-update-diffs)
-        (if (< 0 ediff-number-of-differences)
-            (ediff-jump-to-difference 1)))
+        (when (< 0 ediff-number-of-differences)
+          (vlf-ediff-adjust buffer-A buffer-B t)
+          (vlf-ediff-adjust buffer-A buffer-B)
+          (ediff-jump-to-difference 1)))
     ad-do-it))
 
 (defadvice ediff-previous-difference (around vlf-ediff-prev-difference
@@ -195,9 +195,82 @@ beginning of difference list."
           (vlf-prev-chunk)
           (vlf-ediff-next buffer-A buffer-B 'vlf-prev-chunk))
         (ediff-update-diffs)
-        (if (< 0 ediff-number-of-differences)
-            (ediff-jump-to-difference -1)))
+        (when (< 0 ediff-number-of-differences)
+          (vlf-ediff-adjust buffer-A buffer-B)
+          (vlf-ediff-adjust buffer-A buffer-B t)
+          (ediff-jump-to-difference -1)))
     ad-do-it))
+
+(defun vlf-ediff-adjust (buf-A buf-B &optional end)
+  "Additionally adjust buffer borders for BUF-A and BUF-B.
+Adjust beginning if END is nil."
+  (let* ((diff-num (if end (1- ediff-number-of-differences) 0))
+         (diff-A (ediff-get-diff-overlay diff-num 'A))
+         (diff-B (ediff-get-diff-overlay diff-num 'B))
+         diff-A-str diff-B-str adjust-p)
+    (save-excursion
+      (set-buffer buf-A)
+      (setq adjust-p (if end (= (overlay-end diff-A) (point-max))
+                       (= (overlay-start diff-A) (point-min)))
+            diff-A-str (and adjust-p (buffer-substring-no-properties
+                                      (overlay-start diff-A)
+                                      (overlay-end diff-A))))
+      (set-buffer buf-B)
+      (setq adjust-p (and adjust-p
+                          (if end (= (overlay-end diff-B) (point-max))
+                            (= (overlay-start diff-B) (point-min))))
+            diff-B-str (and adjust-p (buffer-substring-no-properties
+                                      (overlay-start diff-B)
+                                      (overlay-end diff-B))))
+      (if adjust-p
+          (let ((len-A (length diff-A-str))
+                (len-B (length diff-B-str))
+                (adjust-func (if end 'vlf-ediff-adjust-end-1
+                               'vlf-ediff-adjust-start-1)))
+            (cond
+             ((< len-A len-B)
+              (or (funcall adjust-func diff-A-str diff-B-str buf-B)
+                  (setq adjust-p nil)))
+             ((< len-B len-A)
+              (or (funcall adjust-func diff-B-str diff-A-str buf-A)
+                  (setq adjust-p nil)))
+             (t (setq adjust-p nil))))))
+    (if adjust-p (ediff-update-diffs))))
+
+(defun vlf-ediff-adjust-start-1 (diff-short diff-long vlf-buffer)
+  "Remove difference between DIFF-SHORT and DIFF-LONG from beginning\
+of VLF-BUFFER."
+  (when (string-suffix-p diff-short diff-long)
+    (set-buffer vlf-buffer)
+    (vlf-move-to-chunk (+ vlf-start-pos
+                          (length (encode-coding-string
+                                   (substring diff-long 0
+                                              (- (length diff-long)
+                                                 (length diff-short)))
+                                   buffer-file-coding-system t)))
+                       vlf-end-pos)))
+
+(defun vlf-ediff-adjust-end-1 (diff-short diff-long vlf-buffer)
+  "Remove difference between DIFF-SHORT and DIFF-LONG from the end of\
+VLF-BUFFER."
+  (when (string-prefix-p diff-short diff-long)
+    (set-buffer vlf-buffer)
+    (vlf-move-to-chunk vlf-start-pos
+                       (- vlf-end-pos
+                          (length (encode-coding-string
+                                   (substring diff-long
+                                              (length diff-short))
+                                   buffer-file-coding-system t))))))
+
+(unless (fboundp 'string-suffix-p)
+  (defun string-suffix-p (suffix string  &optional ignore-case)
+    "Return non-nil if SUFFIX is a suffix of STRING.
+If IGNORE-CASE is non-nil, the comparison is done without paying
+attention to case differences."
+    (let ((start-pos (- (length string) (length suffix))))
+      (and (>= start-pos 0)
+           (eq t (compare-strings suffix nil nil string start-pos nil
+                                  ignore-case))))))
 
 (provide 'vlf-ediff)
 

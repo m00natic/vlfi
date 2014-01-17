@@ -147,9 +147,9 @@ bytes added to the end."
         (let ((pos (+ (position-bytes (point)) vlf-start-pos))
               (inhibit-read-only t))
           (cond ((< end edit-end)
-                 (let* ((del-pos (1+ (or (byte-to-position
-                                          (- end vlf-start-pos))
-                                         0)))
+                 (let* ((del-pos (or (byte-to-position
+                                      (1+ (- end vlf-start-pos)))
+                                     (point-min)))
                         (del-len (length (encode-coding-region
                                           del-pos (point-max)
                                           buffer-file-coding-system
@@ -167,8 +167,8 @@ bytes added to the end."
                                         (/= start vlf-end-pos) t
                                         (point-max)))))))
           (cond ((< vlf-start-pos start)
-                 (let* ((del-pos (1+ (byte-to-position
-                                      (- start vlf-start-pos))))
+                 (let* ((del-pos (byte-to-position
+                                  (- start vlf-start-pos)))
                         (del-len (length (encode-coding-region
                                           (point-min) del-pos
                                           buffer-file-coding-system
