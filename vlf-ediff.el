@@ -177,6 +177,9 @@ of difference list."
         (when (< 0 ediff-number-of-differences)
           (vlf-ediff-adjust buffer-A buffer-B t)
           (vlf-ediff-adjust buffer-A buffer-B)
+          (if (< 0 ediff-number-of-differences)
+              (save-excursion
+                (vlf-ediff-next buffer-A buffer-B 'vlf-next-chunk)))
           (ediff-jump-to-difference 1)))
     ad-do-it))
 
@@ -198,6 +201,9 @@ beginning of difference list."
         (when (< 0 ediff-number-of-differences)
           (vlf-ediff-adjust buffer-A buffer-B)
           (vlf-ediff-adjust buffer-A buffer-B t)
+          (if (< 0 ediff-number-of-differences)
+              (save-excursion
+                (vlf-ediff-next buffer-A buffer-B 'vlf-prev-chunk)))
           (ediff-jump-to-difference -1)))
     ad-do-it))
 

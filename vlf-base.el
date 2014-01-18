@@ -168,7 +168,7 @@ bytes added to the end."
                                         (point-max)))))))
           (cond ((< vlf-start-pos start)
                  (let* ((del-pos (byte-to-position
-                                  (- start vlf-start-pos)))
+                                  (1+ (- start vlf-start-pos))))
                         (del-len (length (encode-coding-region
                                           (point-min) del-pos
                                           buffer-file-coding-system
