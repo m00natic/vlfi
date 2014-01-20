@@ -1,8 +1,10 @@
 * View Large Files
 
-Emacs minor mode that allows viewing, editing and searching large
-files in batches.  Batch size can be adjusted on the fly and bounds
-the memory that is to be used for operations on the file.
+Emacs minor mode that allows viewing, editing, searching and comparing
+large files in batches.  Batch size can be adjusted on the fly and
+bounds the memory that is to be used for operations on the file.  This
+way multiple large files can be instantly and simultaneously accessed
+without swapping and degraded performance.
 
 This is development version of the GNU ELPA [[http://elpa.gnu.org/packages/vlf][vlf.el]] package.  Here's
 what it does in a nutshell:

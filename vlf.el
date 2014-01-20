@@ -27,9 +27,9 @@
 
 ;;; Commentary:
 ;; This package provides the M-x vlf command, which visits part of
-;; large file without loading it entirely.
-;; The buffer uses VLF mode, which provides several commands for
-;; moving around, searching and editing selected part of file.
+;; large file without loading it entirely.  The buffer uses VLF mode,
+;; which provides several commands for moving around, searching,
+;; comparing and editing selected part of file.
 ;; To have it offered when opening large files:
 ;; (require 'vlf-integrate)
 
@@ -41,18 +41,17 @@
 
 (require 'vlf-base)
 
-(autoload 'vlf-write "vlf-write" "Write current chunk to file.")
+(autoload 'vlf-write "vlf-write" "Write current chunk to file." t)
 (autoload 'vlf-re-search-forward "vlf-search"
-  "Search forward for REGEXP prefix COUNT number of times.")
+  "Search forward for REGEXP prefix COUNT number of times." t)
 (autoload 'vlf-re-search-backward "vlf-search"
-  "Search backward for REGEXP prefix COUNT number of times.")
-(autoload 'vlf-goto-line "vlf-search" "Go to line.")
+  "Search backward for REGEXP prefix COUNT number of times." t)
+(autoload 'vlf-goto-line "vlf-search" "Go to line." t)
 (autoload 'vlf-occur "vlf-occur"
-  "Make whole file occur style index for REGEXP.")
+  "Make whole file occur style index for REGEXP." t)
 (autoload 'vlf-toggle-follow "vlf-follow"
-  "Toggle continuous chunk recenter around current point.")
-(autoload 'vlf-stop-follow "vlf-follow"
-  "Stop continuous recenter.")
+  "Toggle continuous chunk recenter around current point." t)
+(autoload 'vlf-stop-follow "vlf-follow" "Stop continuous recenter." t)
 (autoload 'vlf-ediff-buffers "vlf-ediff"
   "Run batch by batch ediff over VLF buffers." t)
 
