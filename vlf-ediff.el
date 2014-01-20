@@ -53,12 +53,10 @@ respectively of difference list, runs ediff over the adjacent chunks."
                         t))))
   (set-buffer buffer-A)
   (setq buffer-A (current-buffer)) ;names change, so reference by buffer object
-  (let ((vlf-size vlf-batch-size))
-    (vlf-beginning-of-file)
+  (let ((batch-size vlf-batch-size))
     (set-buffer buffer-B)
     (setq buffer-B (current-buffer))
-    (setq vlf-batch-size vlf-size))
-  (vlf-beginning-of-file)
+    (vlf-set-batch-size batch-size))
   (ediff-buffers buffer-A buffer-B
                  '((lambda () (setq vlf-ediff-session t)
                      (vlf-ediff-next ediff-buffer-A ediff-buffer-B
@@ -96,7 +94,8 @@ respectively of difference list, runs ediff over the adjacent chunks."
                                    (ediff-get-default-file-name f 1)))
            (read-number "Batch size (in bytes): " vlf-batch-size))))
   (let ((buffer-A (vlf file-A)))
-    (set (make-local-variable 'vlf-batch-size) batch-size)
+    (set-buffer buffer-A)
+    (vlf-set-batch-size batch-size)
     (let ((buffer-B (vlf file-B)))
       (vlf-ediff-buffers buffer-A buffer-B))))
 
