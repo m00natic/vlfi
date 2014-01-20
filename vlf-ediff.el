@@ -157,6 +157,7 @@ logical chunks in case there is no difference at the current ones."
   (set-buffer buffer-A)
   (setq buffer-A (current-buffer)) ;names change, so reference by buffer object
   (let ((end-A (= vlf-start-pos vlf-end-pos))
+        (chunk-A (cons vlf-start-pos vlf-end-pos))
         (point-max-A (point-max))
         (min-file-size vlf-file-size)
         (forward-p (eq next-func 'vlf-next-chunk)))
@@ -164,55 +165,79 @@ logical chunks in case there is no difference at the current ones."
     (setq buffer-B (current-buffer)
           min-file-size (min min-file-size vlf-file-size))
     (let ((end-B (= vlf-start-pos vlf-end-pos))
+          (chunk-B (cons vlf-start-pos vlf-end-pos))
+          (done nil)
           (reporter (make-progress-reporter
                      "Searching for difference..."
                      (if forward-p vlf-start-pos
                        (- min-file-size vlf-end-pos))
                      min-file-size)))
-      (while (and (or (not end-A) (not end-B))
-                  (or (zerop (compare-buffer-substrings
-                              buffer-A (point-min) point-max-A
-                              buffer-B (point-min) (point-max)))
-                      (with-current-buffer ediff-buffer
-                        (ediff-update-diffs)
-                        (when (and (not end-A) (not end-B))
-                          (vlf-ediff-adjust buffer-A buffer-B)
-                          (or (zerop ediff-number-of-differences)
-                              (vlf-ediff-adjust buffer-A buffer-B t)))
-                        (zerop ediff-number-of-differences))))
-        (funcall next-func)
-        (setq end-B (= vlf-start-pos vlf-end-pos))
-        (with-current-buffer buffer-A
-          (funcall next-func)
-          (setq end-A (= vlf-start-pos vlf-end-pos)
-                point-max-A (point-max)))
-        (progress-reporter-update reporter
-                                  (if forward-p vlf-end-pos
-                                    (- vlf-file-size vlf-start-pos))))
-      (progress-reporter-done reporter)
-      (if (or (not end-A) (not end-B))
-          (progn (vlf-update-buffer-name)
-                 (set-buffer buffer-A)
-                 (vlf-update-buffer-name))
-        (if forward-p
-            (let ((max-file-size vlf-file-size))
-              (vlf-move-to-chunk (- max-file-size vlf-batch-size)
-                                 max-file-size)
-              (set-buffer buffer-A)
-              (setq max-file-size (max max-file-size vlf-file-size))
-              (vlf-move-to-chunk (- max-file-size vlf-batch-size)
-                                 max-file-size))
-          (vlf-beginning-of-file)
+      (unwind-protect
+          (progn
+            (while (and (or (not end-A) (not end-B))
+                        (or (zerop (compare-buffer-substrings
+                                    buffer-A (point-min) point-max-A
+                                    buffer-B (point-min) (point-max)))
+                            (with-current-buffer ediff-buffer
+                              (ediff-update-diffs)
+                              (and (not end-A) (not end-B)
+                                   (vlf-ediff-refine buffer-A
+                                                     buffer-B))
+                              (zerop ediff-number-of-differences))))
+              (funcall next-func)
+              (setq end-B (= vlf-start-pos vlf-end-pos))
+              (with-current-buffer buffer-A
+                (funcall next-func)
+                (setq end-A (= vlf-start-pos vlf-end-pos)
+                      point-max-A (point-max)))
+              (progress-reporter-update reporter
+                                        (if forward-p vlf-end-pos
+                                          (- vlf-file-size
+                                             vlf-start-pos))))
+            (progress-reporter-done reporter)
+            (if (or (not end-A) (not end-B))
+                (progn (vlf-update-buffer-name)
+                       (set-buffer buffer-A)
+                       (vlf-update-buffer-name))
+              (if forward-p
+                  (let ((max-file-size vlf-file-size))
+                    (vlf-move-to-chunk (- max-file-size vlf-batch-size)
+                                       max-file-size)
+                    (set-buffer buffer-A)
+                    (setq max-file-size (max max-file-size
+                                             vlf-file-size))
+                    (vlf-move-to-chunk (- max-file-size
+                                          vlf-batch-size)
+                                       max-file-size))
+                (vlf-beginning-of-file)
+                (set-buffer buffer-A)
+                (vlf-beginning-of-file))
+              (set-buffer ediff-buffer)
+              (ediff-update-diffs)
+              (if (or (not forward-p)
+                      (and (not end-A) (not end-B)))
+                  (vlf-ediff-refine buffer-A buffer-B)))
+            (setq done t))
+        (unless done
           (set-buffer buffer-A)
-          (vlf-beginning-of-file))
-        (set-buffer ediff-buffer)
-        (ediff-update-diffs)
-        (when (or (not forward-p)
-                  (and (not end-A) (not end-B)))
-          (or (zerop ediff-number-of-differences)
-              (vlf-ediff-adjust buffer-A buffer-B))
-          (or (zerop ediff-number-of-differences)
-              (vlf-ediff-adjust buffer-A buffer-B t)))))))
+          (set-buffer-modified-p nil)
+          (vlf-move-to-chunk (car chunk-A) (cdr chunk-A) t)
+          (set-buffer buffer-B)
+          (set-buffer-modified-p nil)
+          (vlf-move-to-chunk (car chunk-B) (cdr chunk-B) t)
+          (set-buffer ediff-buffer)
+          (ediff-update-diffs)
+          (vlf-ediff-refine buffer-A buffer-B))))))
+
+(defun vlf-ediff-refine (buffer-A buffer-B)
+  "Try to minimize differences between BUFFER-A and BUFFER-B.
+This can happen if first or last difference is at the start/end of
+buffer."
+  (or (zerop ediff-number-of-differences)
+      (let ((adjust-p (vlf-ediff-adjust buffer-A buffer-B)))
+        (setq adjust-p (or (vlf-ediff-adjust buffer-A buffer-B t)
+                           adjust-p))
+        (if adjust-p (ediff-update-diffs)))))
 
 (defun vlf-ediff-adjust (buf-A buf-B &optional end)
   "Additionally adjust buffer borders for BUF-A and BUF-B.
@@ -221,8 +246,7 @@ Adjust beginning if END is nil."
          (diff-A (ediff-get-diff-overlay diff-num 'A))
          (diff-B (ediff-get-diff-overlay diff-num 'B))
          diff-A-str diff-B-str adjust-p)
-    (save-excursion
-      (set-buffer buf-A)
+    (with-current-buffer buf-A
       (setq adjust-p (if end (= (overlay-end diff-A) (point-max))
                        (= (overlay-start diff-A) (point-min)))
             diff-A-str (and adjust-p (buffer-substring-no-properties
@@ -248,7 +272,7 @@ Adjust beginning if END is nil."
               (or (funcall adjust-func diff-B-str diff-A-str buf-A)
                   (setq adjust-p nil)))
              (t (setq adjust-p nil))))))
-    (if adjust-p (ediff-update-diffs))))
+    adjust-p))
 
 (defun vlf-ediff-adjust-start (diff-short diff-long vlf-buffer)
   "Remove difference between DIFF-SHORT and DIFF-LONG from beginning\
