@@ -92,11 +92,11 @@ Here's example how to add another prefix (*C-x v*):
 
 ** Control batch size
 
+Use *M-x vlf-set-batch-size* to change batch size and update chunk
+immediately.
+
 *C-c C-v +* and *C-c C-v -* control current batch size by factors
 of 2.
-
-You can also set by hand local variable *vlf-batch-size* and then
-refresh with *C-c C-v g*.
 
 ** Move around
 

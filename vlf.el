@@ -53,6 +53,8 @@
   "Toggle continuous chunk recenter around current point.")
 (autoload 'vlf-stop-follow "vlf-follow"
   "Stop continuous recenter.")
+(autoload 'vlf-ediff-buffers "vlf-ediff"
+  "Run batch by batch ediff over VLF buffers." t)
 
 (defvar vlf-mode-map
   (let ((map (make-sparse-keymap)))
@@ -71,6 +73,7 @@
     (define-key map "]" 'vlf-end-of-file)
     (define-key map "j" 'vlf-jump-to-chunk)
     (define-key map "l" 'vlf-goto-line)
+    (define-key map "e" 'vlf-ediff-buffers)
     (define-key map "f" 'vlf-toggle-follow)
     (define-key map "g" 'vlf-revert)
     map)
@@ -186,9 +189,13 @@ When prefix argument is negative
 Normally, the value is doubled;
 with the prefix argument DECREASE it is halved."
   (interactive "P")
-  (setq vlf-batch-size (if decrease
-                           (/ vlf-batch-size 2)
-                         (* vlf-batch-size 2)))
+  (vlf-set-batch-size (if decrease (/ vlf-batch-size 2)
+                        (* vlf-batch-size 2))))
+
+(defun vlf-set-batch-size (size)
+  "Set batch to SIZE bytes and update chunk."
+  (interactive (list (read-number "Size in bytes: " vlf-batch-size)))
+  (setq vlf-batch-size size)
   (vlf-move-to-batch vlf-start-pos))
 
 (defun vlf-beginning-of-file ()
