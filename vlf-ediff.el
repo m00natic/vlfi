@@ -59,12 +59,11 @@ respectively of difference list, runs ediff over the adjacent chunks."
     (setq buffer-B (current-buffer))
     (setq vlf-batch-size vlf-size))
   (vlf-beginning-of-file)
-  (vlf-ediff-next buffer-A buffer-B 'vlf-next-chunk)
   (ediff-buffers buffer-A buffer-B
                  '((lambda () (setq vlf-ediff-session t)
-                     (when (< 0 ediff-number-of-differences)
-                       (vlf-ediff-adjust buffer-A buffer-B t)
-                       (ediff-jump-to-difference 1))))))
+                     (vlf-ediff-next ediff-buffer-A ediff-buffer-B
+                                     ediff-control-buffer
+                                     'vlf-next-chunk)))))
 
 ;;;###autoload
 (defun vlf-ediff-files (file-A file-B batch-size)
@@ -101,6 +100,47 @@ respectively of difference list, runs ediff over the adjacent chunks."
     (let ((buffer-B (vlf file-B)))
       (vlf-ediff-buffers buffer-A buffer-B))))
 
+(defadvice ediff-next-difference (around vlf-ediff-next-difference
+                                         compile activate)
+  "Move to the next VLF chunk and search for difference if at the end\
+of difference list."
+  (if (and vlf-ediff-session
+           (<= (1- ediff-number-of-differences)
+               ediff-current-difference))
+      (let ((buffer-A ediff-buffer-A)
+            (buffer-B ediff-buffer-B)
+            (ediff-buffer (current-buffer)))
+        (save-excursion
+          (set-buffer buffer-A)
+          (vlf-next-chunk)
+          (set-buffer buffer-B)
+          (vlf-next-chunk)
+          (vlf-ediff-next buffer-A buffer-B ediff-buffer
+                          'vlf-next-chunk))
+        (or (zerop ediff-number-of-differences)
+            (ediff-jump-to-difference 1)))
+    ad-do-it))
+
+(defadvice ediff-previous-difference (around vlf-ediff-prev-difference
+                                             compile activate)
+  "Move to the previous VLF chunk and search for difference if at the\
+beginning of difference list."
+  (if (and vlf-ediff-session
+           (<= ediff-current-difference 0))
+      (let ((buffer-A ediff-buffer-A)
+            (buffer-B ediff-buffer-B)
+            (ediff-buffer (current-buffer)))
+        (save-excursion
+          (set-buffer buffer-A)
+          (vlf-prev-chunk)
+          (set-buffer buffer-B)
+          (vlf-prev-chunk)
+          (vlf-ediff-next buffer-A buffer-B ediff-buffer
+                          'vlf-prev-chunk))
+        (or (zerop ediff-number-of-differences)
+            (ediff-jump-to-difference -1)))
+    ad-do-it))
+
 (defun vlf-next-chunk ()
   "Move to next chunk."
   (vlf-move-to-chunk vlf-end-pos (+ vlf-end-pos vlf-batch-size) t))
@@ -109,10 +149,11 @@ respectively of difference list, runs ediff over the adjacent chunks."
   "Move to previous chunk."
   (vlf-move-to-chunk (- vlf-start-pos vlf-batch-size) vlf-start-pos t))
 
-(defun vlf-ediff-next (buffer-A buffer-B &optional next-func)
-  "Find next pair of chunks that differ in BUFFER-A and BUFFER-B.
-NEXT-FUNC is used to jump to the next logical chunks in case there is
-no difference at the current ones."
+(defun vlf-ediff-next (buffer-A buffer-B ediff-buffer
+                                &optional next-func)
+  "Find next pair of chunks that differ in BUFFER-A and BUFFER-B\
+governed by EDIFF-BUFFER.  NEXT-FUNC is used to jump to the next
+logical chunks in case there is no difference at the current ones."
   (set-buffer buffer-A)
   (setq buffer-A (current-buffer)) ;names change, so reference by buffer object
   (let ((end-A (= vlf-start-pos vlf-end-pos))
@@ -129,9 +170,16 @@ no difference at the current ones."
                        (- min-file-size vlf-end-pos))
                      min-file-size)))
       (while (and (or (not end-A) (not end-B))
-                  (zerop (compare-buffer-substrings
-                          buffer-A (point-min) point-max-A
-                          buffer-B (point-min) (point-max))))
+                  (or (zerop (compare-buffer-substrings
+                              buffer-A (point-min) point-max-A
+                              buffer-B (point-min) (point-max)))
+                      (with-current-buffer ediff-buffer
+                        (ediff-update-diffs)
+                        (when (and (not end-A) (not end-B))
+                          (vlf-ediff-adjust buffer-A buffer-B)
+                          (or (zerop ediff-number-of-differences)
+                              (vlf-ediff-adjust buffer-A buffer-B t)))
+                        (zerop ediff-number-of-differences))))
         (funcall next-func)
         (setq end-B (= vlf-start-pos vlf-end-pos))
         (with-current-buffer buffer-A
@@ -142,70 +190,29 @@ no difference at the current ones."
                                   (if forward-p vlf-end-pos
                                     (- vlf-file-size vlf-start-pos))))
       (progress-reporter-done reporter)
-      (cond ((or (not end-A) (not end-B))
-             (vlf-update-buffer-name)
-             (set-buffer buffer-A)
-             (vlf-update-buffer-name))
-            (forward-p                  ;end of both files
-             (let ((max-file-size vlf-file-size))
-               (with-current-buffer buffer-A
-                 (setq max-file-size (max max-file-size vlf-file-size))
-                 (vlf-move-to-chunk (- max-file-size vlf-batch-size)
-                                    max-file-size))
-               (vlf-move-to-chunk (- max-file-size vlf-batch-size)
-                                  max-file-size)))
-            (t (vlf-beginning-of-file)
-               (set-buffer buffer-A)
-               (vlf-beginning-of-file))))))
-
-(defadvice ediff-next-difference (around vlf-ediff-next-difference
-                                         compile activate)
-  "Move to the next VLF chunk and search for difference if at the end\
-of difference list."
-  (if (and vlf-ediff-session
-           (<= (1- ediff-number-of-differences)
-               ediff-current-difference))
-      (let ((buffer-A ediff-buffer-A)
-            (buffer-B ediff-buffer-B))
-        (save-excursion
+      (if (or (not end-A) (not end-B))
+          (progn (vlf-update-buffer-name)
+                 (set-buffer buffer-A)
+                 (vlf-update-buffer-name))
+        (if forward-p
+            (let ((max-file-size vlf-file-size))
+              (vlf-move-to-chunk (- max-file-size vlf-batch-size)
+                                 max-file-size)
+              (set-buffer buffer-A)
+              (setq max-file-size (max max-file-size vlf-file-size))
+              (vlf-move-to-chunk (- max-file-size vlf-batch-size)
+                                 max-file-size))
+          (vlf-beginning-of-file)
           (set-buffer buffer-A)
-          (vlf-next-chunk)
-          (set-buffer buffer-B)
-          (vlf-next-chunk)
-          (vlf-ediff-next buffer-A buffer-B 'vlf-next-chunk))
+          (vlf-beginning-of-file))
+        (set-buffer ediff-buffer)
         (ediff-update-diffs)
-        (when (< 0 ediff-number-of-differences)
-          (vlf-ediff-adjust buffer-A buffer-B t)
-          (vlf-ediff-adjust buffer-A buffer-B)
-          (if (< 0 ediff-number-of-differences)
-              (save-excursion
-                (vlf-ediff-next buffer-A buffer-B 'vlf-next-chunk)))
-          (ediff-jump-to-difference 1)))
-    ad-do-it))
-
-(defadvice ediff-previous-difference (around vlf-ediff-prev-difference
-                                             compile activate)
-  "Move to the previous VLF chunk and search for difference if at the\
-beginning of difference list."
-  (if (and vlf-ediff-session
-           (<= ediff-current-difference 0))
-      (let ((buffer-A ediff-buffer-A)
-            (buffer-B ediff-buffer-B))
-        (save-excursion
-          (set-buffer buffer-A)
-          (vlf-prev-chunk)
-          (set-buffer buffer-B)
-          (vlf-prev-chunk)
-          (vlf-ediff-next buffer-A buffer-B 'vlf-prev-chunk))
-        (ediff-update-diffs)
-        (when (< 0 ediff-number-of-differences)
-          (vlf-ediff-adjust buffer-A buffer-B)
-          (vlf-ediff-adjust buffer-A buffer-B t)
-          (if (< 0 ediff-number-of-differences)
-              (save-excursion
-                (vlf-ediff-next buffer-A buffer-B 'vlf-prev-chunk)))
-          (ediff-jump-to-difference -1)))
-    ad-do-it))
+        (when (or (not forward-p)
+                  (and (not end-A) (not end-B)))
+          (or (zerop ediff-number-of-differences)
+              (vlf-ediff-adjust buffer-A buffer-B))
+          (or (zerop ediff-number-of-differences)
+              (vlf-ediff-adjust buffer-A buffer-B t)))))))
 
 (defun vlf-ediff-adjust (buf-A buf-B &optional end)
   "Additionally adjust buffer borders for BUF-A and BUF-B.
@@ -231,8 +238,8 @@ Adjust beginning if END is nil."
       (if adjust-p
           (let ((len-A (length diff-A-str))
                 (len-B (length diff-B-str))
-                (adjust-func (if end 'vlf-ediff-adjust-end-1
-                               'vlf-ediff-adjust-start-1)))
+                (adjust-func (if end 'vlf-ediff-adjust-end
+                               'vlf-ediff-adjust-start)))
             (cond
              ((< len-A len-B)
               (or (funcall adjust-func diff-A-str diff-B-str buf-B)
@@ -243,7 +250,7 @@ Adjust beginning if END is nil."
              (t (setq adjust-p nil))))))
     (if adjust-p (ediff-update-diffs))))
 
-(defun vlf-ediff-adjust-start-1 (diff-short diff-long vlf-buffer)
+(defun vlf-ediff-adjust-start (diff-short diff-long vlf-buffer)
   "Remove difference between DIFF-SHORT and DIFF-LONG from beginning\
 of VLF-BUFFER."
   (when (string-suffix-p diff-short diff-long)
@@ -256,7 +263,7 @@ of VLF-BUFFER."
                                    buffer-file-coding-system t)))
                        vlf-end-pos)))
 
-(defun vlf-ediff-adjust-end-1 (diff-short diff-long vlf-buffer)
+(defun vlf-ediff-adjust-end (diff-short diff-long vlf-buffer)
   "Remove difference between DIFF-SHORT and DIFF-LONG from the end of\
 VLF-BUFFER."
   (when (string-prefix-p diff-short diff-long)
