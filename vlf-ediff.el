@@ -220,10 +220,10 @@ logical chunks in case there is no difference at the current ones."
         (unless done
           (set-buffer buffer-A)
           (set-buffer-modified-p nil)
-          (vlf-move-to-chunk (car chunk-A) (cdr chunk-A) t)
+          (vlf-move-to-chunk (car chunk-A) (cdr chunk-A))
           (set-buffer buffer-B)
           (set-buffer-modified-p nil)
-          (vlf-move-to-chunk (car chunk-B) (cdr chunk-B) t)
+          (vlf-move-to-chunk (car chunk-B) (cdr chunk-B))
           (set-buffer ediff-buffer)
           (ediff-update-diffs)
           (vlf-ediff-refine buffer-A buffer-B))))))
