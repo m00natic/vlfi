@@ -175,22 +175,53 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
   "Go to line N.  If N is negative, count from the end of file."
   (interactive (if (vlf-no-modifications)
                    (list (read-number "Go to line: "))))
+  (vlf-verify-size)
   (let ((start-pos vlf-start-pos)
         (end-pos vlf-end-pos)
         (pos (point))
         (success nil))
     (unwind-protect
         (if (< 0 n)
-            (progn (vlf-beginning-of-file)
-                   (goto-char (point-min))
-                   (setq success (vlf-re-search "[\n\C-m]" (1- n)
-                                                nil 0)))
-          (vlf-end-of-file)
-          (goto-char (point-max))
-          (setq success (vlf-re-search "[\n\C-m]" (- n) t 0)))
-      (if success
-          (message "Onto line %s" n)
-        (vlf-move-to-chunk start-pos end-pos)
+            (let ((start 0)
+                  (end (min vlf-batch-size vlf-file-size))
+                  (inhibit-read-only t))
+              (setq n (1- n))
+              (vlf-with-undo-disabled
+               (while (and (< (- end start) n)
+                           (< n (- vlf-file-size start)))
+                 (erase-buffer)
+                 (insert-file-contents-literally buffer-file-name
+                                                 nil start end)
+                 (goto-char (point-min))
+                 (while (re-search-forward "[\n\C-m]" nil t)
+                   (setq n (1- n)))
+                 (vlf-verify-size)
+                 (setq start end
+                       end (min vlf-file-size
+                                (+ start vlf-batch-size))))
+               (when (< n (- vlf-file-size end))
+                 (vlf-move-to-chunk-2 start end)
+                 (goto-char (point-min))
+                 (setq success (vlf-re-search "[\n\C-m]" n nil 0)))))
+          (let ((start (max 0 (- vlf-file-size vlf-batch-size)))
+                (end vlf-file-size)
+                (inhibit-read-only t))
+            (vlf-with-undo-disabled
+             (while (and (< (- end) n) (< n (- start end)))
+               (erase-buffer)
+               (insert-file-contents-literally buffer-file-name nil
+                                               start end)
+               (goto-char (point-max))
+               (while (re-search-backward "[\n\C-m]" nil t)
+                 (setq n (1+ n)))
+               (setq end start
+                     start (max 0 (- end vlf-batch-size))))
+             (when (< (- end) n)
+               (vlf-move-to-chunk-2 start end)
+               (goto-char (point-max))
+               (setq success (vlf-re-search "[\n\C-m]" (- n) t 0))))))
+      (unless success
+        (vlf-move-to-chunk-2 start-pos end-pos)
         (goto-char pos)))))
 
 (provide 'vlf-search)
