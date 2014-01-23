@@ -250,7 +250,8 @@ buffer."
 
 (defun vlf-ediff-adjust (buf-A buf-B &optional end)
   "Additionally adjust buffer borders for BUF-A and BUF-B.
-Adjust beginning if END is nil."
+Adjust beginning if END is nil.  Return t if refining is needed,
+nil otherwise."
   (let* ((diff-num (if end (1- ediff-number-of-differences) 0))
          (diff-A (ediff-get-diff-overlay diff-num 'A))
          (diff-B (ediff-get-diff-overlay diff-num 'B))
