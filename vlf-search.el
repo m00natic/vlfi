@@ -40,12 +40,14 @@ BATCH-STEP is amount of overlap between successive chunks."
          (match-start-pos (+ vlf-start-pos (position-bytes (point))))
          (match-end-pos match-start-pos)
          (to-find count)
+         (font-lock font-lock-mode)
          (reporter (make-progress-reporter
                     (concat "Searching for " regexp "...")
                     (if backward
                         (- vlf-file-size vlf-end-pos)
                       vlf-start-pos)
                     vlf-file-size)))
+    (font-lock-mode 0)
     (vlf-with-undo-disabled
      (unwind-protect
          (catch 'end-of-file
@@ -108,6 +110,7 @@ BATCH-STEP is amount of overlap between successive chunks."
                                                   vlf-end-pos)))))
            (progress-reporter-done reporter))
        (set-buffer-modified-p nil)
+       (if font-lock (font-lock-mode 1))
        (if backward
            (vlf-goto-match match-chunk-start match-chunk-end
                            match-end-pos match-start-pos
@@ -179,11 +182,17 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
   (let ((start-pos vlf-start-pos)
         (end-pos vlf-end-pos)
         (pos (point))
+        (font-lock font-lock-mode)
         (success nil))
+    (font-lock-mode 0)
     (unwind-protect
         (if (< 0 n)
             (let ((start 0)
                   (end (min vlf-batch-size vlf-file-size))
+                  (reporter (make-progress-reporter
+                             (concat "Searching for line "
+                                     (number-to-string n) "...")
+                             0 vlf-file-size))
                   (inhibit-read-only t))
               (setq n (1- n))
               (vlf-with-undo-disabled
@@ -230,9 +239,11 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                (vlf-move-to-chunk-2 start end)
                (goto-char (point-max))
                (setq success (vlf-re-search "[\n\C-m]" n t 0))))))
+      (if font-lock (font-lock-mode 1))
       (unless success
         (vlf-move-to-chunk-2 start-pos end-pos)
-        (goto-char pos)))))
+        (goto-char pos)
+        (message "Unable to find line")))))
 
 (provide 'vlf-search)
 

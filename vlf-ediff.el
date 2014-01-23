@@ -158,19 +158,23 @@ logical chunks in case there is no difference at the current ones."
   (let ((end-A (= vlf-start-pos vlf-end-pos))
         (chunk-A (cons vlf-start-pos vlf-end-pos))
         (point-max-A (point-max))
+        (font-lock-A font-lock-mode)
         (min-file-size vlf-file-size)
         (forward-p (eq next-func 'vlf-next-chunk)))
+    (font-lock-mode 0)
     (set-buffer buffer-B)
     (setq buffer-B (current-buffer)
           min-file-size (min min-file-size vlf-file-size))
     (let ((end-B (= vlf-start-pos vlf-end-pos))
           (chunk-B (cons vlf-start-pos vlf-end-pos))
+          (font-lock-B font-lock-mode)
           (done nil)
           (reporter (make-progress-reporter
                      "Searching for difference..."
                      (if forward-p vlf-start-pos
                        (- min-file-size vlf-end-pos))
                      min-file-size)))
+      (font-lock-mode 0)
       (unwind-protect
           (progn
             (while (and (or (not end-A) (not end-B))
@@ -217,6 +221,12 @@ logical chunks in case there is no difference at the current ones."
                       (and (not end-A) (not end-B)))
                   (vlf-ediff-refine buffer-A buffer-B)))
             (setq done t))
+        (when font-lock-A
+          (set-buffer buffer-A)
+          (font-lock-mode 1))
+        (when font-lock-B
+          (set-buffer buffer-B)
+          (font-lock-mode 1))
         (unless done
           (set-buffer buffer-A)
           (set-buffer-modified-p nil)
