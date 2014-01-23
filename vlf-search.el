@@ -198,28 +198,38 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                  (vlf-verify-size)
                  (setq start end
                        end (min vlf-file-size
-                                (+ start vlf-batch-size))))
+                                (+ start vlf-batch-size)))
+                 (progress-reporter-update reporter start))
+               (progress-reporter-done reporter)
                (when (< n (- vlf-file-size end))
                  (vlf-move-to-chunk-2 start end)
                  (goto-char (point-min))
                  (setq success (vlf-re-search "[\n\C-m]" n nil 0)))))
           (let ((start (max 0 (- vlf-file-size vlf-batch-size)))
                 (end vlf-file-size)
+                (reporter (make-progress-reporter
+                           (concat "Searching for line -"
+                                   (number-to-string n) "...")
+                           0 vlf-file-size))
                 (inhibit-read-only t))
+            (setq n (- n))
             (vlf-with-undo-disabled
-             (while (and (< (- end) n) (< n (- start end)))
+             (while (and (< (- end start) n) (< n end))
                (erase-buffer)
                (insert-file-contents-literally buffer-file-name nil
                                                start end)
                (goto-char (point-max))
                (while (re-search-backward "[\n\C-m]" nil t)
-                 (setq n (1+ n)))
+                 (setq n (1- n)))
                (setq end start
-                     start (max 0 (- end vlf-batch-size))))
-             (when (< (- end) n)
+                     start (max 0 (- end vlf-batch-size)))
+               (progress-reporter-update reporter
+                                         (- vlf-file-size end)))
+             (progress-reporter-done reporter)
+             (when (< n end)
                (vlf-move-to-chunk-2 start end)
                (goto-char (point-max))
-               (setq success (vlf-re-search "[\n\C-m]" (- n) t 0))))))
+               (setq success (vlf-re-search "[\n\C-m]" n t 0))))))
       (unless success
         (vlf-move-to-chunk-2 start-pos end-pos)
         (goto-char pos)))))
