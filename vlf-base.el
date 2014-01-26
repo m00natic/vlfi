@@ -249,6 +249,15 @@ bytes added to the end."
     (let ((coding-system-for-read coding))
       (decode-coding-inserted-region position (point-max)
                                      buffer-file-name nil start end)))
+  (when (eq (detect-coding-region position (min (+ position
+                                                   vlf-sample-size)
+                                                (point-max)) t)
+            'no-conversion)
+    (delete-region position (point-max))
+    (insert-file-contents-literally buffer-file-name nil start end)
+    (let ((coding-system-for-read nil))
+      (decode-coding-inserted-region position (point-max)
+                                     buffer-file-name nil start end)))
   (setq buffer-file-coding-system last-coding-system-used))
 
 (defun vlf-adjust-start (start end position adjust-end)
