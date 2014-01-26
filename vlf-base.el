@@ -146,26 +146,39 @@ bytes added to the end."
             (shift-end 0))
         (let ((pos (+ (position-bytes (point)) vlf-start-pos))
               (inhibit-read-only t))
-          (cond ((< end edit-end)
+          (cond ((= end vlf-start-pos)
+                 (or (eq buffer-undo-list t)
+                     (setq buffer-undo-list nil))
+                 (vlf-with-undo-disabled (erase-buffer))
+                 (setq modified nil))
+                ((< end edit-end)
                  (setq end (car (vlf-delete-region
                                  (point-min) vlf-start-pos edit-end
-                                 end (or (byte-to-position
-                                          (- end vlf-start-pos))
-                                         (point-min))
+                                 end (min (or (byte-to-position
+                                               (- end vlf-start-pos))
+                                              (point-min))
+                                          (point-max))
                                  nil))))
                 ((< edit-end end)
                  (vlf-with-undo-disabled
                   (setq shift-end (cdr (vlf-insert-file-contents
-                                        vlf-end-pos end
-                                        (/= start vlf-end-pos) t
+                                        vlf-end-pos end nil t
                                         (point-max)))))))
           (setq vlf-end-pos (+ end shift-end))
-          (cond ((< vlf-start-pos start)
+          (cond ((= start edit-end)
+                 (or (eq buffer-undo-list t)
+                     (setq buffer-undo-list nil))
+                 (vlf-with-undo-disabled
+                  (delete-region (point-min) (point)))
+                 (setq modified nil))
+                ((< vlf-start-pos start)
                  (let ((del-info (vlf-delete-region
                                   (point-min) vlf-start-pos
                                   vlf-end-pos start
-                                  (byte-to-position
-                                   (- start vlf-start-pos)) t)))
+                                  (min (or (byte-to-position
+                                            (- start vlf-start-pos))
+                                           (point))
+                                       (point-max)) t)))
                    (setq start (car del-info))
                    (vlf-shift-undo-list (- (point-min)
                                            (cdr del-info)))))
@@ -173,8 +186,7 @@ bytes added to the end."
                  (let ((edit-end-pos (point-max)))
                    (vlf-with-undo-disabled
                     (setq shift-start (car (vlf-insert-file-contents
-                                            start vlf-start-pos t
-                                            (/= end vlf-start-pos)
+                                            start vlf-start-pos t nil
                                             edit-end-pos)))
                     (goto-char (point-min))
                     (insert (delete-and-extract-region
