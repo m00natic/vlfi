@@ -241,7 +241,8 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                (setq success (vlf-re-search "[\n\C-m]" n t 0))))))
       (if font-lock (font-lock-mode 1))
       (unless success
-        (vlf-move-to-chunk-2 start-pos end-pos)
+        (vlf-with-undo-disabled
+         (vlf-move-to-chunk-2 start-pos end-pos))
         (goto-char pos)
         (message "Unable to find line")))))
 

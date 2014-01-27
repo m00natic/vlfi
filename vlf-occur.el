@@ -136,9 +136,9 @@ Prematurely ending indexing will still show what's found so far."
     (let ((start-pos vlf-start-pos)
           (end-pos vlf-end-pos)
           (pos (point)))
-      (vlf-beginning-of-file)
-      (goto-char (point-min))
       (vlf-with-undo-disabled
+       (vlf-beginning-of-file)
+       (goto-char (point-min))
        (unwind-protect (vlf-build-occur regexp (current-buffer))
          (vlf-move-to-chunk start-pos end-pos)
          (goto-char pos))))))
