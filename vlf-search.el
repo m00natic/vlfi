@@ -34,7 +34,8 @@
 BATCH-STEP is amount of overlap between successive chunks."
   (if (<= count 0)
       (error "Count must be positive"))
-  (let* ((case-fold-search t)
+  (let* ((tramp-verbose (min 2 tramp-verbose))
+         (case-fold-search t)
          (match-chunk-start vlf-start-pos)
          (match-chunk-end vlf-end-pos)
          (match-start-pos (+ vlf-start-pos (position-bytes (point))))
@@ -179,7 +180,8 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
   (interactive (if (vlf-no-modifications)
                    (list (read-number "Go to line: "))))
   (vlf-verify-size)
-  (let ((start-pos vlf-start-pos)
+  (let ((tramp-verbose (min 2 tramp-verbose))
+        (start-pos vlf-start-pos)
         (end-pos vlf-end-pos)
         (pos (point))
         (font-lock font-lock-mode)
@@ -209,7 +211,6 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                        end (min vlf-file-size
                                 (+ start vlf-batch-size)))
                  (progress-reporter-update reporter start))
-               (progress-reporter-done reporter)
                (when (< n (- vlf-file-size end))
                  (vlf-move-to-chunk-2 start end)
                  (goto-char (point-min))
@@ -234,7 +235,6 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                      start (max 0 (- end vlf-batch-size)))
                (progress-reporter-update reporter
                                          (- vlf-file-size end)))
-             (progress-reporter-done reporter)
              (when (< n end)
                (vlf-move-to-chunk-2 start end)
                (goto-char (point-max))
