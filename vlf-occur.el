@@ -131,8 +131,10 @@ Prematurely ending indexing will still show what's found so far."
           (set (make-local-variable 'vlf-batch-size) batch-size)
           (vlf-mode 1)
           (goto-char (point-min))
+          (run-hook-with-args 'vlf-before-batch-functions 'occur)
           (vlf-with-undo-disabled
            (vlf-build-occur regexp vlf-buffer))))
+    (run-hook-with-args 'vlf-before-batch-functions 'occur)
     (let ((start-pos vlf-start-pos)
           (end-pos vlf-end-pos)
           (pos (point)))
@@ -141,11 +143,13 @@ Prematurely ending indexing will still show what's found so far."
        (goto-char (point-min))
        (unwind-protect (vlf-build-occur regexp (current-buffer))
          (vlf-move-to-chunk start-pos end-pos)
-         (goto-char pos))))))
+         (goto-char pos)))))
+  (run-hook-with-args 'vlf-before-after-functions 'occur))
 
 (defun vlf-build-occur (regexp vlf-buffer)
   "Build occur style index for REGEXP over VLF-BUFFER."
-  (let ((tramp-verbose (min 2 tramp-verbose))
+  (let ((tramp-verbose (if (boundp 'tramp-verbose)
+                           (min tramp-verbose 2)))
         (case-fold-search t)
         (line 1)
         (last-match-line 0)
@@ -244,7 +248,8 @@ in file: %s" total-matches line regexp file)
           (set-buffer-modified-p nil)
           (forward-char 2)
           (vlf-occur-mode))
-        (display-buffer occur-buffer)))))
+        (display-buffer occur-buffer))
+      (run-hook-with-args 'vlf-after-batch-functions 'occur))))
 
 (provide 'vlf-occur)
 

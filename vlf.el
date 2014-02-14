@@ -39,6 +39,18 @@
 
 ;;; Code:
 
+(defcustom vlf-before-batch-functions nil
+  "Hook that runs before multiple batch operations.
+One argument is supplied that specifies current action.  Possible
+values are: `write', `ediff', `occur', `search', `goto-line'."
+  :group 'vlf :type 'hook)
+
+(defcustom vlf-after-batch-functions nil
+  "Hook that runs after multiple batch operations.
+One argument is supplied that specifies current action.  Possible
+values are: `write', `ediff', `occur', `search', `goto-line'."
+  :group 'vlf :type 'hook)
+
 (require 'vlf-base)
 
 (autoload 'vlf-write "vlf-write" "Write current chunk to file." t)

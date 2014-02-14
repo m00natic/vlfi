@@ -34,7 +34,9 @@
 BATCH-STEP is amount of overlap between successive chunks."
   (if (<= count 0)
       (error "Count must be positive"))
-  (let* ((tramp-verbose (min 2 tramp-verbose))
+  (run-hook-with-args 'vlf-before-batch-functions 'search)
+  (let* ((tramp-verbose (if (boundp 'tramp-verbose)
+                            (min tramp-verbose 2)))
          (case-fold-search t)
          (match-chunk-start vlf-start-pos)
          (match-chunk-end vlf-end-pos)
@@ -118,7 +120,8 @@ BATCH-STEP is amount of overlap between successive chunks."
                            count to-find)
          (vlf-goto-match match-chunk-start match-chunk-end
                          match-start-pos match-end-pos
-                         count to-find))))))
+                         count to-find)))))
+  (run-hook-with-args 'vlf-after-batch-functions 'search))
 
 (defun vlf-goto-match (match-chunk-start match-chunk-end
                                          match-pos-start
@@ -179,8 +182,10 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
   "Go to line N.  If N is negative, count from the end of file."
   (interactive (if (vlf-no-modifications)
                    (list (read-number "Go to line: "))))
+  (run-hook-with-args 'vlf-before-batch-functions 'goto-line)
   (vlf-verify-size)
-  (let ((tramp-verbose (min 2 tramp-verbose))
+  (let ((tramp-verbose (if (boundp 'tramp-verbose)
+                           (min tramp-verbose 2)))
         (start-pos vlf-start-pos)
         (end-pos vlf-end-pos)
         (pos (point))
@@ -244,7 +249,8 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
         (vlf-with-undo-disabled
          (vlf-move-to-chunk-2 start-pos end-pos))
         (goto-char pos)
-        (message "Unable to find line")))))
+        (message "Unable to find line"))
+      (run-hook-with-args 'vlf-after-batch-functions 'goto-line))))
 
 (provide 'vlf-search)
 

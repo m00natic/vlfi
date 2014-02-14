@@ -26,10 +26,8 @@
 
 ;;; Code:
 
-(defgroup vlf nil
-  "View Large Files in Emacs."
-  :prefix "vlf-"
-  :group 'files)
+(defgroup vlf nil "View Large Files in Emacs."
+  :prefix "vlf-" :group 'files)
 
 (defcustom vlf-application 'ask
   "Determines when `vlf' will be offered on opening files.
@@ -37,18 +35,16 @@ Possible values are: nil to never use it;
 `ask' offer `vlf' when file size is beyond `large-file-warning-threshold';
 `dont-ask' automatically use `vlf' for large files;
 `always' use `vlf' for all files."
-  :group 'vlf
-  :type '(radio (const :format "%v " nil)
-                (const :format "%v " ask)
-                (const :format "%v " dont-ask)
-                (const :format "%v" always)))
+  :group 'vlf :type '(radio (const :format "%v " nil)
+                            (const :format "%v " ask)
+                            (const :format "%v " dont-ask)
+                            (const :format "%v" always)))
 
 (defcustom vlf-forbidden-modes-list
   '(archive-mode tar-mode jka-compr git-commit-mode image-mode
                  doc-view-mode doc-view-mode-maybe ebrowse-tree-mode)
   "Major modes which VLF will not be automatically applied to."
-  :group 'vlf
-  :type '(list symbol))
+  :group 'vlf :type '(list symbol))
 
 (unless (fboundp 'file-size-human-readable)
   (defun file-size-human-readable (file-size)

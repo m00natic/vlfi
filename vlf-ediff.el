@@ -1,4 +1,4 @@
-;;; vlf-ediff.el --- VLF ediff functionality
+;;; vlf-ediff.el --- VLF ediff functionality  -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2014 Free Software Foundation, Inc.
 
@@ -154,6 +154,7 @@ beginning of difference list."
 governed by EDIFF-BUFFER.  NEXT-FUNC is used to jump to the next
 logical chunks in case there is no difference at the current ones."
   (set-buffer buffer-A)
+  (run-hook-with-args 'vlf-before-batch-functions 'ediff)
   (setq buffer-A (current-buffer)) ;names change, so reference by buffer object
   (let ((end-A (= vlf-start-pos vlf-end-pos))
         (chunk-A (cons vlf-start-pos vlf-end-pos))
@@ -163,9 +164,11 @@ logical chunks in case there is no difference at the current ones."
         (forward-p (eq next-func 'vlf-next-chunk)))
     (font-lock-mode 0)
     (set-buffer buffer-B)
+    (run-hook-with-args 'vlf-before-batch-functions 'ediff)
     (setq buffer-B (current-buffer)
           min-file-size (min min-file-size vlf-file-size))
-    (let ((tramp-verbose (min 2 tramp-verbose))
+    (let ((tramp-verbose (if (boundp 'tramp-verbose)
+                             (min tramp-verbose 2)))
           (end-B (= vlf-start-pos vlf-end-pos))
           (chunk-B (cons vlf-start-pos vlf-end-pos))
           (font-lock-B font-lock-mode)
@@ -222,12 +225,6 @@ logical chunks in case there is no difference at the current ones."
                       (and (not end-A) (not end-B)))
                   (vlf-ediff-refine buffer-A buffer-B)))
             (setq done t))
-        (when font-lock-A
-          (set-buffer buffer-A)
-          (font-lock-mode 1))
-        (when font-lock-B
-          (set-buffer buffer-B)
-          (font-lock-mode 1))
         (unless done
           (set-buffer buffer-A)
           (set-buffer-modified-p nil)
@@ -237,7 +234,13 @@ logical chunks in case there is no difference at the current ones."
           (vlf-move-to-chunk (car chunk-B) (cdr chunk-B))
           (set-buffer ediff-buffer)
           (ediff-update-diffs)
-          (vlf-ediff-refine buffer-A buffer-B))))))
+          (vlf-ediff-refine buffer-A buffer-B))
+        (set-buffer buffer-A)
+        (if font-lock-A (font-lock-mode 1))
+        (run-hook-with-args 'vlf-after-batch-functions 'ediff)
+        (set-buffer buffer-B)
+        (if font-lock-B (font-lock-mode 1))
+        (run-hook-with-args 'vlf-after-batch-functions 'ediff)))))
 
 (defun vlf-ediff-refine (buffer-A buffer-B)
   "Try to minimize differences between BUFFER-A and BUFFER-B.
