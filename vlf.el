@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2006, 2012-2014 Free Software Foundation, Inc.
 
-;; Version: 1.4
+;; Version: 1.5
 ;; Keywords: large files, utilities
 ;; Maintainer: Andrey Kotlarski <m00naticus@gmail.com>
 ;; Authors: 2006 Mathias Dahl <mathias.dahl@gmail.com>
@@ -98,37 +98,48 @@ values are: `write', `ediff', `occur', `search', `goto-line'."
 
 (define-minor-mode vlf-mode
   "Mode to browse large files in."
-  :lighter " VLF"
-  :group 'vlf
-  :keymap vlf-prefix-map
-  (if vlf-mode
-      (progn
-        (set (make-local-variable 'require-final-newline) nil)
-        (add-hook 'write-file-functions 'vlf-write nil t)
-        (set (make-local-variable 'revert-buffer-function)
-             'vlf-revert)
-        (make-local-variable 'vlf-batch-size)
-        (setq vlf-file-size (vlf-get-file-size buffer-file-truename)
-              vlf-start-pos 0
-              vlf-end-pos 0)
-        (let* ((pos (position-bytes (point)))
-               (start (* (/ pos vlf-batch-size) vlf-batch-size)))
-          (goto-char (byte-to-position (- pos start)))
-          (vlf-move-to-batch start)))
-    (kill-local-variable 'revert-buffer-function)
-    (vlf-stop-follow)
-    (when (or (not large-file-warning-threshold)
-              (< vlf-file-size large-file-warning-threshold)
-              (y-or-n-p (format "Load whole file (%s)? "
-                                (file-size-human-readable
-                                 vlf-file-size))))
-      (kill-local-variable 'require-final-newline)
-      (remove-hook 'write-file-functions 'vlf-write t)
-      (let ((pos (+ vlf-start-pos (position-bytes (point)))))
-        (vlf-with-undo-disabled
-         (insert-file-contents buffer-file-name t nil nil t))
-        (goto-char (byte-to-position pos)))
-      (rename-buffer (file-name-nondirectory buffer-file-name) t))))
+  :lighter " VLF" :group 'vlf :keymap vlf-prefix-map
+  (cond (vlf-mode
+         (set (make-local-variable 'require-final-newline) nil)
+         (add-hook 'write-file-functions 'vlf-write nil t)
+         (set (make-local-variable 'revert-buffer-function)
+              'vlf-revert)
+         (make-local-variable 'vlf-batch-size)
+         (setq vlf-file-size (vlf-get-file-size buffer-file-truename)
+               vlf-start-pos 0
+               vlf-end-pos 0)
+         (let* ((pos (position-bytes (point)))
+                (start (* (/ pos vlf-batch-size) vlf-batch-size)))
+           (goto-char (byte-to-position (- pos start)))
+           (vlf-move-to-batch start))
+         (add-hook 'after-change-major-mode-hook 'vlf-keep-alive t t)
+         (vlf-keep-alive))
+        ((or (not large-file-warning-threshold)
+             (< vlf-file-size large-file-warning-threshold)
+             (y-or-n-p (format "Load whole file (%s)? "
+                               (file-size-human-readable
+                                vlf-file-size))))
+         (kill-local-variable 'revert-buffer-function)
+         (vlf-stop-follow)
+         (kill-local-variable 'require-final-newline)
+         (remove-hook 'write-file-functions 'vlf-write t)
+         (remove-hook 'after-change-major-mode-hook
+                      'vlf-keep-alive t)
+         (let ((hexl (eq major-mode 'hexl-mode)))
+           (if hexl (hexl-mode-exit))
+           (let ((pos (+ vlf-start-pos (position-bytes (point)))))
+             (vlf-with-undo-disabled
+              (insert-file-contents buffer-file-name t nil nil t))
+             (goto-char (byte-to-position pos)))
+           (if hexl (hexl-mode)))
+         (rename-buffer (file-name-nondirectory buffer-file-name) t))
+        (t (setq vlf-mode t))))
+
+(defun vlf-keep-alive ()
+  "Keep `vlf-mode' on major mode change."
+  (if (eq major-mode 'hexl-mode)
+      (remove-hook 'write-contents-functions 'hexl-save-buffer t))
+  (setq vlf-mode t))
 
 ;;;###autoload
 (defun vlf (file)
@@ -186,6 +197,41 @@ When prefix argument is negative
 
 (defadvice scroll-down (around vlf-scroll-down
                                activate compile)
+  "Slide to previous batch if at beginning of buffer in `vlf-mode'."
+  (if (and vlf-mode (pos-visible-in-window-p (point-min)))
+      (progn (vlf-prev-batch 1)
+             (goto-char (point-max)))
+    ad-do-it))
+
+;; hexl mode integration
+(defun vlf-hexl-before (&optional operation)
+  "Temporarily disable `hexl-mode' for OPERATION."
+  (when (eq major-mode 'hexl-mode)
+    (hexl-mode-exit)
+    (set (make-local-variable 'vlf-restore-hexl-mode) operation)))
+
+(defun vlf-hexl-after (&optional operation)
+  "Re-enable `hexl-mode' if active before OPERATION."
+  (when (and (boundp 'vlf-restore-hexl-mode)
+             (eq vlf-restore-hexl-mode operation))
+    (hexl-mode)
+    (kill-local-variable 'vlf-restore-hexl-mode)))
+
+(add-hook 'vlf-before-batch-functions 'vlf-hexl-before)
+(add-hook 'vlf-after-batch-functions 'vlf-hexl-after)
+(add-hook 'vlf-before-chunk-update 'vlf-hexl-before)
+(add-hook 'vlf-after-chunk-update 'vlf-hexl-after)
+
+(defadvice hexl-scroll-up (around vlf-scroll-up
+                                  activate compile)
+  "Slide to next batch if at end of buffer in `vlf-mode'."
+  (if (and vlf-mode (pos-visible-in-window-p (point-max)))
+      (progn (vlf-next-batch 1)
+             (goto-char (point-min)))
+    ad-do-it))
+
+(defadvice hexl-scroll-down (around vlf-scroll-down
+                                    activate compile)
   "Slide to previous batch if at beginning of buffer in `vlf-mode'."
   (if (and vlf-mode (pos-visible-in-window-p (point-min)))
       (progn (vlf-prev-batch 1)
