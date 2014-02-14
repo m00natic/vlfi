@@ -33,43 +33,42 @@
   "Write current chunk to file.  Always return true to disable save.
 If changing size of chunk, shift remaining file content."
   (interactive)
-  (and (buffer-modified-p)
-       (or (verify-visited-file-modtime (current-buffer))
-           (y-or-n-p "File has changed since visited or saved.  \
-Save anyway? "))
-       (if (zerop vlf-file-size)           ;new file
-           (progn
-             (write-region nil nil buffer-file-name vlf-start-pos t)
-             (setq vlf-file-size (vlf-get-file-size
-                                  buffer-file-truename)
-                   vlf-end-pos vlf-file-size)
-             (vlf-update-buffer-name))
-         (widen)
-         (let* ((region-length (length (encode-coding-region
-                                        (point-min) (point-max)
-                                        buffer-file-coding-system t)))
-                (size-change (- vlf-end-pos vlf-start-pos
-                                region-length)))
-           (if (zerop size-change)
-               (write-region nil nil buffer-file-name vlf-start-pos t)
-             (run-hook-with-args 'vlf-before-batch-functions 'write)
-             (let ((tramp-verbose (if (boundp 'tramp-verbose)
-                                      (min tramp-verbose 2)))
-                   (pos (point))
-                   (font-lock font-lock-mode))
-               (font-lock-mode 0)
-               (if (< 0 size-change)
-                   (vlf-file-shift-back size-change)
-                 (vlf-file-shift-forward (- size-change)))
-               (if font-lock (font-lock-mode 1))
-               (vlf-move-to-chunk-2 vlf-start-pos
-                                    (if (< (- vlf-end-pos vlf-start-pos)
-                                           vlf-batch-size)
-                                        (+ vlf-start-pos vlf-batch-size)
-                                      vlf-end-pos))
-               (vlf-update-buffer-name)
-               (goto-char pos))
-             (run-hook-with-args 'vlf-after-batch-functions 'write)))))
+  (when (and (buffer-modified-p)
+             (or (verify-visited-file-modtime (current-buffer))
+                 (y-or-n-p "File has changed since visited or saved.\
+  Save anyway? ")))
+    (run-hook-with-args 'vlf-before-batch-functions 'write)
+    (if (zerop vlf-file-size)           ;new file
+        (progn (write-region nil nil buffer-file-name vlf-start-pos t)
+               (setq vlf-file-size (vlf-get-file-size
+                                    buffer-file-truename)
+                     vlf-end-pos vlf-file-size)
+               (vlf-update-buffer-name))
+      (widen)
+      (let* ((region-length (length (encode-coding-region
+                                     (point-min) (point-max)
+                                     buffer-file-coding-system t)))
+             (size-change (- vlf-end-pos vlf-start-pos
+                             region-length)))
+        (if (zerop size-change)
+            (write-region nil nil buffer-file-name vlf-start-pos t)
+          (let ((tramp-verbose (if (boundp 'tramp-verbose)
+                                   (min tramp-verbose 2)))
+                (pos (point))
+                (font-lock font-lock-mode))
+            (font-lock-mode 0)
+            (if (< 0 size-change)
+                (vlf-file-shift-back size-change)
+              (vlf-file-shift-forward (- size-change)))
+            (if font-lock (font-lock-mode 1))
+            (vlf-move-to-chunk-2 vlf-start-pos
+                                 (if (< (- vlf-end-pos vlf-start-pos)
+                                        vlf-batch-size)
+                                     (+ vlf-start-pos vlf-batch-size)
+                                   vlf-end-pos))
+            (vlf-update-buffer-name)
+            (goto-char pos)))))
+    (run-hook-with-args 'vlf-after-batch-functions 'write))
   t)
 
 (defun vlf-file-shift-back (size-change)
