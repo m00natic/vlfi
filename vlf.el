@@ -222,15 +222,16 @@ When prefix argument is negative
 (add-hook 'vlf-before-chunk-update 'vlf-hexl-before)
 (add-hook 'vlf-after-chunk-update 'vlf-hexl-after)
 
-(defadvice hexl-scroll-up (around vlf-scroll-up
+(defadvice hexl-scroll-up (around vlf-hexl-scroll-up
                                   activate compile)
   "Slide to next batch if at end of buffer in `vlf-mode'."
-  (if (and vlf-mode (pos-visible-in-window-p (point-max)))
+  (if (and vlf-mode (pos-visible-in-window-p (point-max))
+           (or (not (numberp arg)) (< 0 arg)))
       (progn (vlf-next-batch 1)
              (goto-char (point-min)))
     ad-do-it))
 
-(defadvice hexl-scroll-down (around vlf-scroll-down
+(defadvice hexl-scroll-down (around vlf-hexl-scroll-down
                                     activate compile)
   "Slide to previous batch if at beginning of buffer in `vlf-mode'."
   (if (and vlf-mode (pos-visible-in-window-p (point-min)))
