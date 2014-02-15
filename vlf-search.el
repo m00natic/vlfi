@@ -120,14 +120,14 @@ BATCH-STEP is amount of overlap between successive chunks."
                            count to-find)
          (vlf-goto-match match-chunk-start match-chunk-end
                          match-start-pos match-end-pos
-                         count to-find)))))
-  (run-hook-with-args 'vlf-after-batch-functions 'search))
+                         count to-find))
+       (run-hook-with-args 'vlf-after-batch-functions 'search)))))
 
 (defun vlf-goto-match (match-chunk-start match-chunk-end
                                          match-pos-start
                                          match-pos-end
                                          count to-find)
-  "Move to MATCH-CHUNK-START MATCH-CHUNK-END surrounding \
+  "Move to MATCH-CHUNK-START MATCH-CHUNK-END surrounding\
 MATCH-POS-START and MATCH-POS-END.
 According to COUNT and left TO-FIND, show if search has been
 successful.  Return nil if nothing found."
@@ -248,6 +248,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
       (unless success
         (vlf-with-undo-disabled
          (vlf-move-to-chunk-2 start-pos end-pos))
+        (vlf-update-buffer-name)
         (goto-char pos)
         (message "Unable to find line"))
       (run-hook-with-args 'vlf-after-batch-functions 'goto-line))))
