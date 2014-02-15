@@ -138,7 +138,7 @@ values are: `write', `ediff', `occur', `search', `goto-line'."
 (defun vlf-keep-alive ()
   "Keep `vlf-mode' on major mode change."
   (if (eq major-mode 'hexl-mode)
-      (remove-hook 'write-contents-functions 'hexl-save-buffer t))
+      (set (make-local-variable 'revert-buffer-function) 'vlf-revert))
   (setq vlf-mode t))
 
 ;;;###autoload
@@ -221,6 +221,13 @@ When prefix argument is negative
 (add-hook 'vlf-after-batch-functions 'vlf-hexl-after)
 (add-hook 'vlf-before-chunk-update 'vlf-hexl-before)
 (add-hook 'vlf-after-chunk-update 'vlf-hexl-after)
+
+(defadvice hexl-save-buffer (around vlf-hexl-save
+                                    activate compile)
+  "Prevent hexl save if `vlf-mode' is active."
+  (if vlf-mode
+      (vlf-write)
+    ad-do-it))
 
 (defadvice hexl-scroll-up (around vlf-hexl-scroll-up
                                   activate compile)
