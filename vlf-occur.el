@@ -134,7 +134,7 @@ Prematurely ending indexing will still show what's found so far."
           (run-hook-with-args 'vlf-before-batch-functions 'occur)
           (vlf-with-undo-disabled
            (vlf-build-occur regexp vlf-buffer))
-          (run-hook-with-args 'vlf-before-after-functions 'occur)))
+          (run-hook-with-args 'vlf-after-batch-functions 'occur)))
     (run-hook-with-args 'vlf-before-batch-functions 'occur)
     (let ((start-pos vlf-start-pos)
           (end-pos vlf-end-pos)
@@ -145,7 +145,7 @@ Prematurely ending indexing will still show what's found so far."
        (unwind-protect (vlf-build-occur regexp (current-buffer))
          (vlf-move-to-chunk start-pos end-pos)
          (goto-char pos))))
-    (run-hook-with-args 'vlf-before-after-functions 'occur)))
+    (run-hook-with-args 'vlf-after-batch-functions 'occur)))
 
 (defun vlf-build-occur (regexp vlf-buffer)
   "Build occur style index for REGEXP over VLF-BUFFER."
