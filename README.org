@@ -3,26 +3,29 @@
 Emacs minor mode that allows viewing, editing, searching and comparing
 large files in batches.  Batch size can be adjusted on the fly and
 bounds the memory that is to be used for operations on the file.  This
-way multiple large files can be instantly and simultaneously accessed
-without swapping and degraded performance.
+way multiple large files (like terabytes or whatever) can be instantly
+and simultaneously accessed without swapping and degraded
+performance.
 
-This is development version of the GNU ELPA [[http://elpa.gnu.org/packages/vlf][vlf.el]] package.  Here's
-what it does in a nutshell:
+This is development version of the GNU ELPA [[http://elpa.gnu.org/packages/vlf][VLF]] package.  Here's what
+it offers in a nutshell:
 
 - regular expression search on whole file (in constant memory
   determined by current batch size)
 - chunk editing (if size has changed, saving is done in constant
   memory determined by current batch size)
-- occur like indexing
+- [[http://www.emacswiki.org/emacs/OccurMode][Occur]] like indexing
 - options to jump to beginning, end or arbitrary file chunk
 - ability to jump/insert given number of batches at once
 - newly added content is acknowledged if file has changed size
   meanwhile
 - automatic scrolling of batches
-- as VLF is minor mode, font locking and functionality of the
-  respective major mode is also present
-- by batch Ediff comparison
-- VLF is added as an option when opening large files
+- as a minor mode, font locking and functionality of the respective
+  major mode is also present
+- by batch [[http://www.emacswiki.org/emacs/EdiffMode][Ediff]] comparison
+- can be added as option to automatically open large files
+- smooth integration with [[http://www.emacswiki.org/emacs/HexlMode][hexl-mode]]
+- works with [[http://www.emacswiki.org/emacs/TrampMode][TRAMP]] so accessing network files is fine
 
 GNU Emacs 23 and 24 are supported.
 
@@ -34,12 +37,12 @@ M-x vlf PATH-TO-FILE
 
 Emacs' Unicode support is leveraged so you'll not see bare bytes but
 characters decoded as if file is normally opened.  This holds for
-editing, search and indexing.
+editing, search, indexing and comparison.
 
 ** 32-bit GNU Emacs
 
 Regular Emacs integers are used, so if you use 32-bit Emacs without
-bignum support, VLF will not work with files over 512 MB (maximum
+bignum support, *VLF* will not work with files over 512 MB (maximum
 integer value).
 
 ** Memory control
@@ -56,12 +59,12 @@ To have *vlf* offered as choice when opening large files:
 (require 'vlf-integrate)
 #+END_EXAMPLE
 
-You can control when vlf-mode is invoked or offered with the
-*vlf-application* customization option.  By default it will offer VLF
-when opening large files.  There are also options to never use it (you
-can still call *vlf* command explicitly); to use it without asking for
-large files or to invoke it on all files.  Here's example setup such
-that vlf-mode automatically launches for large files:
+You can control when *vlf-mode* is invoked or offered with the
+*vlf-application* customization option.  By default it will offer
+*VLF* when opening large files.  There are also options to never use
+it (you can still call *vlf* command explicitly); to use it without
+asking for large files or to invoke it on all files.  Here's example
+setup such that *vlf-mode* automatically launches for large files:
 
 #+BEGIN_EXAMPLE
 (custom-set-variables
@@ -70,12 +73,12 @@ that vlf-mode automatically launches for large files:
 
 *** Disable for specific mode
 
-To disable automatic usage of VLF for a major mode, add it to
+To disable automatic usage of *VLF* for a major mode, add it to
 *vlf-forbidden-modes-list*.
 
 *** Disable for specific function
 
-To disable automatic usage of VLF for a function, for example named
+To disable automatic usage of *VLF* for a function, for example named
 *func* defined in file *file.el*:
 
 #+BEGIN_EXAMPLE
@@ -84,8 +87,8 @@ To disable automatic usage of VLF for a function, for example named
 
 ** Keymap
 
-All VLF operations are grouped under the *C-c C-v* prefix by default.
-Here's example how to add another prefix (*C-x v*):
+All *VLF* operations are grouped under the *C-c C-v* prefix by
+default.  Here's example how to add another prefix (*C-x v*):
 
 #+BEGIN_EXAMPLE
 (eval-after-load "vlf"
@@ -133,10 +136,10 @@ beforehand.
 
 ** Occur over whole file
 
-*C-c C-v o* builds index for given regular expression just like
-*M-x occur*.  It does this batch by batch over the whole file.  Note
-that even if you prematurely stop it with *C-g*, it will still show
-index of what's found so far.
+*C-c C-v o* builds index for given regular expression just like M-x
+occur*.  It does so batch by batch over the whole file.  Note that
+even if you prematurely stop it with *C-g*, it will still show index
+of what's found so far.
 
 ** Jump to line
 
@@ -159,3 +162,18 @@ or taken from the first buffer in case of buffers).  Moving after the
 last difference in current chunk searches for following one with
 difference.  The other way around if looking for difference before the
 first one.
+
+* Extending
+
+** Move hooks
+
+A couple of hooks are run whenever updating chunk:
+*vlf-before-chunk-update* and *vlf-after-chunk-update*.
+
+** Batch move hooks
+
+Some operations may trigger multiple chunk moves.  There are a couple
+of hooks that run in such cases: *vlf-before-batch-functions* and
+*vlf-after-batch-functions*.  They are passed one argument that
+specifies type of operation that runs.  Possible values are the
+symbols: *write*, *ediff*, *occur*, *search* and *goto-line*.
