@@ -27,9 +27,6 @@
 
 ;;; Code:
 
-(defgroup vlf nil "View Large Files in Emacs."
-  :prefix "vlf-" :group 'files)
-
 (defcustom vlf-batch-size 1024
   "Defines how large each batch of file data is (in bytes)."
   :group 'vlf :type 'integer)

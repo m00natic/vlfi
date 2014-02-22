@@ -39,6 +39,9 @@
 
 ;;; Code:
 
+(defgroup vlf nil "View Large Files in Emacs."
+  :prefix "vlf-" :group 'files)
+
 (defcustom vlf-before-batch-functions nil
   "Hook that runs before multiple batch operations.
 One argument is supplied that specifies current action.  Possible
@@ -222,29 +225,31 @@ When prefix argument is negative
 (add-hook 'vlf-before-chunk-update 'vlf-hexl-before)
 (add-hook 'vlf-after-chunk-update 'vlf-hexl-after)
 
-(defadvice hexl-save-buffer (around vlf-hexl-save
-                                    activate compile)
-  "Prevent hexl save if `vlf-mode' is active."
-  (if vlf-mode
-      (vlf-write)
-    ad-do-it))
+(eval-after-load "hexl"
+  '(progn
+     (defadvice hexl-save-buffer (around vlf-hexl-save
+                                         activate compile)
+       "Prevent hexl save if `vlf-mode' is active."
+       (if vlf-mode
+           (vlf-write)
+         ad-do-it))
 
-(defadvice hexl-scroll-up (around vlf-hexl-scroll-up
-                                  activate compile)
-  "Slide to next batch if at end of buffer in `vlf-mode'."
-  (if (and vlf-mode (pos-visible-in-window-p (point-max))
-           (or (not (numberp arg)) (< 0 arg)))
-      (progn (vlf-next-batch 1)
-             (goto-char (point-min)))
-    ad-do-it))
+     (defadvice hexl-scroll-up (around vlf-hexl-scroll-up
+                                       activate compile)
+       "Slide to next batch if at end of buffer in `vlf-mode'."
+       (if (and vlf-mode (pos-visible-in-window-p (point-max))
+                (or (not (numberp arg)) (< 0 arg)))
+           (progn (vlf-next-batch 1)
+                  (goto-char (point-min)))
+         ad-do-it))
 
-(defadvice hexl-scroll-down (around vlf-hexl-scroll-down
-                                    activate compile)
-  "Slide to previous batch if at beginning of buffer in `vlf-mode'."
-  (if (and vlf-mode (pos-visible-in-window-p (point-min)))
-      (progn (vlf-prev-batch 1)
-             (goto-char (point-max)))
-    ad-do-it))
+     (defadvice hexl-scroll-down (around vlf-hexl-scroll-down
+                                         activate compile)
+       "Slide to previous batch if at beginning of buffer in `vlf-mode'."
+       (if (and vlf-mode (pos-visible-in-window-p (point-min)))
+           (progn (vlf-prev-batch 1)
+                  (goto-char (point-max)))
+         ad-do-it))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; utilities
