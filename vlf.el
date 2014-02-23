@@ -128,7 +128,7 @@ values are: `write', `ediff', `occur', `search', `goto-line'."
          (remove-hook 'write-file-functions 'vlf-write t)
          (remove-hook 'after-change-major-mode-hook
                       'vlf-keep-alive t)
-         (let ((hexl (eq major-mode 'hexl-mode)))
+         (let ((hexl (derived-mode-p 'hexl-mode)))
            (if hexl (hexl-mode-exit))
            (let ((pos (+ vlf-start-pos (position-bytes (point)))))
              (vlf-with-undo-disabled
@@ -140,7 +140,7 @@ values are: `write', `ediff', `occur', `search', `goto-line'."
 
 (defun vlf-keep-alive ()
   "Keep `vlf-mode' on major mode change."
-  (if (eq major-mode 'hexl-mode)
+  (if (derived-mode-p 'hexl-mode)
       (set (make-local-variable 'revert-buffer-function) 'vlf-revert))
   (setq vlf-mode t))
 
@@ -209,7 +209,7 @@ When prefix argument is negative
 ;; hexl mode integration
 (defun vlf-hexl-before (&optional operation)
   "Temporarily disable `hexl-mode' for OPERATION."
-  (when (eq major-mode 'hexl-mode)
+  (when (derived-mode-p 'hexl-mode)
     (hexl-mode-exit)
     (set (make-local-variable 'vlf-restore-hexl-mode) operation)))
 
