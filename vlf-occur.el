@@ -249,8 +249,7 @@ in file: %s" total-matches line regexp file)
           (set-buffer-modified-p nil)
           (forward-char 2)
           (vlf-occur-mode))
-        (display-buffer occur-buffer))
-      (run-hook-with-args 'vlf-after-batch-functions 'occur))))
+        (display-buffer occur-buffer)))))
 
 (provide 'vlf-occur)
 
