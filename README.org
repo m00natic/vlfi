@@ -12,16 +12,16 @@ it offers in a nutshell:
 
 - regular expression search on whole file (in constant memory
   determined by current batch size)
-- chunk editing (if size has changed, saving is done in constant
-  memory determined by current batch size)
+- chunk editing (save is immediate if size hasn't changed, done in
+  constant memory determined by current batch size otherwise)
 - [[http://www.emacswiki.org/emacs/OccurMode][Occur]] like indexing
 - options to jump to beginning, end or arbitrary file chunk
 - ability to jump/insert given number of batches at once
 - newly added content is acknowledged if file has changed size
   meanwhile
 - automatic scrolling of batches
-- as a minor mode, font locking and functionality of the respective
-  major mode is also present
+- as it's a minor mode, font locking and functionality of the
+  respective major mode is also present
 - by batch [[http://www.emacswiki.org/emacs/EdiffMode][Ediff]] comparison
 - can be added as option to automatically open large files
 - smooth integration with [[http://www.emacswiki.org/emacs/HexlMode][hexl-mode]]
@@ -105,8 +105,8 @@ of 2.
 
 ** Move around
 
-Scrolling automatically triggers moving to previous or next chunk at
-the beginning or end respectively of the current one.
+Scrolling automatically triggers move to previous or next chunk at the
+beginning or end respectively of the current one.
 
 *C-c C-v n* and *C-c C-v p* move batch by batch.  With positive
 prefix argument they move prefix number of batches.  With negative -
@@ -136,17 +136,17 @@ beforehand.
 
 ** Occur over whole file
 
-*C-c C-v o* builds index for given regular expression just like M-x
-occur*.  It does so batch by batch over the whole file.  Note that
-even if you prematurely stop it with *C-g*, it will still show index
-of what's found so far.
+*C-c C-v o* builds index for given regular expression just like
+*M-x occur*.  It does so batch by batch over the whole file.  Note
+that even if you prematurely stop it with *C-g*, it will still show
+index of what's found so far.
 
 ** Jump to line
 
 *C-c C-v l* jumps to given line in file.  This is done by searching
-from the beginning, so again the bigger current batch size, the
-quicker.  With negative argument, lines are counted from the end of
-file.
+from the beginning, so again the bigger current batch size, probably
+the quicker.  With negative argument, lines are counted from the end
+of file.
 
 ** Edit and save
 
@@ -174,6 +174,6 @@ A couple of hooks are run whenever updating chunk:
 
 Some operations may trigger multiple chunk moves.  There are a couple
 of hooks that run in such cases: *vlf-before-batch-functions* and
-*vlf-after-batch-functions*.  They are passed one argument that
+*vlf-after-batch-functions*.  They are passed one argument which
 specifies type of operation that runs.  Possible values are the
 symbols: *write*, *ediff*, *occur*, *search* and *goto-line*.
