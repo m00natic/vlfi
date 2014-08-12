@@ -165,6 +165,7 @@ Prematurely ending indexing will still show what's found so far."
         (line-regexp (concat "\\(?5:[\n\C-m]\\)\\|\\(?10:"
                              regexp "\\)"))
         (batch-step (/ vlf-batch-size 8))
+        (is-hexl (derived-mode-p 'hexl-mode))
         (end-of-file nil)
         (reporter (make-progress-reporter
                    (concat "Building index for " regexp "...")
@@ -222,14 +223,17 @@ Prematurely ending indexing will still show what's found so far."
               (setq end-of-file (= vlf-end-pos vlf-file-size))
               (unless end-of-file
                 (let ((batch-move (- vlf-end-pos batch-step)))
-                  (vlf-move-to-batch (if (< batch-move match-end-pos)
-                                         match-end-pos
-                                       batch-move) t))
-                (goto-char (if (< vlf-start-pos match-end-pos)
-                               (or (byte-to-position (- match-end-pos
-                                                        vlf-start-pos))
-                                   (point-min))
-                             (point-min)))
+                  (vlf-move-to-batch (if (or is-hexl
+                                             (< match-end-pos
+                                                batch-move))
+                                         batch-move
+                                       match-end-pos) t))
+                (goto-char (if (or is-hexl
+                                   (<= match-end-pos vlf-start-pos))
+                               (point-min)
+                             (or (byte-to-position (- match-end-pos
+                                                      vlf-start-pos))
+                                   (point-min))))
                 (setq last-match-line 0
                       last-line-pos (line-beginning-position))
                 (progress-reporter-update reporter vlf-end-pos))))
@@ -243,7 +247,7 @@ Prematurely ending indexing will still show what's found so far."
         (with-current-buffer occur-buffer
           (goto-char (point-min))
           (insert (propertize
-                   (format "%d matches in %d lines for \"%s\" \
+                   (format "%d matches from %d lines for \"%s\" \
 in file: %s" total-matches line regexp file)
                    'face 'underline))
           (set-buffer-modified-p nil)

@@ -43,6 +43,7 @@ BATCH-STEP is amount of overlap between successive chunks."
          (match-start-pos (+ vlf-start-pos (position-bytes (point))))
          (match-end-pos match-start-pos)
          (to-find count)
+         (is-hexl (derived-mode-p 'hexl-mode))
          (font-lock font-lock-mode)
          (reporter (make-progress-reporter
                     (concat "Searching for " regexp "...")
@@ -72,16 +73,18 @@ BATCH-STEP is amount of overlap between successive chunks."
                                                (- vlf-batch-size
                                                   batch-step))))
                             (vlf-move-to-batch
-                             (if (< match-start-pos batch-move)
-                                 (- match-start-pos vlf-batch-size)
-                               batch-move) t))
-                          (goto-char (if (< match-start-pos
-                                            vlf-end-pos)
-                                         (or (byte-to-position
+                             (if (or is-hexl
+                                     (<= batch-move match-start-pos))
+                                 batch-move
+                               (- match-start-pos vlf-batch-size)) t))
+                          (goto-char (if (or is-hexl
+                                             (<= vlf-end-pos
+                                                 match-start-pos))
+                                         (point-max)
+                                       (or (byte-to-position
                                               (- match-start-pos
                                                  vlf-start-pos))
-                                             (point-max))
-                                       (point-max)))
+                                             (point-max))))
                           (progress-reporter-update
                            reporter (- vlf-file-size
                                        vlf-start-pos)))))
@@ -100,15 +103,17 @@ BATCH-STEP is amount of overlap between successive chunks."
                       (throw 'end-of-file nil))
                      (t (let ((batch-move (- vlf-end-pos batch-step)))
                           (vlf-move-to-batch
-                           (if (< batch-move match-end-pos)
-                               match-end-pos
-                             batch-move) t))
-                        (goto-char (if (< vlf-start-pos match-end-pos)
-                                       (or (byte-to-position
+                           (if (or is-hexl
+                                   (< match-end-pos batch-move))
+                               batch-move
+                             match-end-pos) t))
+                        (goto-char (if (or is-hexl
+                                           (<= match-end-pos vlf-start-pos))
+                                       (point-min)
+                                     (or (byte-to-position
                                             (- match-end-pos
                                                vlf-start-pos))
-                                           (point-min))
-                                     (point-min)))
+                                           (point-min))))
                         (progress-reporter-update reporter
                                                   vlf-end-pos)))))
            (progress-reporter-done reporter))
@@ -189,6 +194,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
         (start-pos vlf-start-pos)
         (end-pos vlf-end-pos)
         (pos (point))
+        (is-hexl (derived-mode-p 'hexl-mode))
         (font-lock font-lock-mode)
         (success nil))
     (font-lock-mode 0)
@@ -203,19 +209,20 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                   (inhibit-read-only t))
               (setq n (1- n))
               (vlf-with-undo-disabled
-               (while (and (< (- end start) n)
-                           (< n (- vlf-file-size start)))
-                 (erase-buffer)
-                 (insert-file-contents-literally buffer-file-name
-                                                 nil start end)
-                 (goto-char (point-min))
-                 (while (re-search-forward "[\n\C-m]" nil t)
-                   (setq n (1- n)))
-                 (vlf-verify-size)
-                 (setq start end
-                       end (min vlf-file-size
-                                (+ start vlf-batch-size)))
-                 (progress-reporter-update reporter start))
+               (or is-hexl
+                   (while (and (< (- end start) n)
+                               (< n (- vlf-file-size start)))
+                     (erase-buffer)
+                     (insert-file-contents-literally buffer-file-name
+                                                     nil start end)
+                     (goto-char (point-min))
+                     (while (re-search-forward "[\n\C-m]" nil t)
+                       (setq n (1- n)))
+                     (vlf-verify-size)
+                     (setq start end
+                           end (min vlf-file-size
+                                    (+ start vlf-batch-size)))
+                     (progress-reporter-update reporter start)))
                (when (< n (- vlf-file-size end))
                  (vlf-move-to-chunk-2 start end)
                  (goto-char (point-min))
@@ -229,17 +236,18 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                 (inhibit-read-only t))
             (setq n (- n))
             (vlf-with-undo-disabled
-             (while (and (< (- end start) n) (< n end))
-               (erase-buffer)
-               (insert-file-contents-literally buffer-file-name nil
-                                               start end)
-               (goto-char (point-max))
-               (while (re-search-backward "[\n\C-m]" nil t)
-                 (setq n (1- n)))
-               (setq end start
-                     start (max 0 (- end vlf-batch-size)))
-               (progress-reporter-update reporter
-                                         (- vlf-file-size end)))
+             (or is-hexl
+                 (while (and (< (- end start) n) (< n end))
+                   (erase-buffer)
+                   (insert-file-contents-literally buffer-file-name
+                                                   nil start end)
+                   (goto-char (point-max))
+                   (while (re-search-backward "[\n\C-m]" nil t)
+                     (setq n (1- n)))
+                   (setq end start
+                         start (max 0 (- end vlf-batch-size)))
+                   (progress-reporter-update reporter
+                                             (- vlf-file-size end))))
              (when (< n end)
                (vlf-move-to-chunk-2 start end)
                (goto-char (point-max))

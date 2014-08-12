@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2006, 2012-2014 Free Software Foundation, Inc.
 
-;; Version: 1.5
+;; Version: 1.6
 ;; Keywords: large files, utilities
 ;; Maintainer: Andrey Kotlarski <m00naticus@gmail.com>
 ;; Authors: 2006 Mathias Dahl <mathias.dahl@gmail.com>
@@ -207,23 +207,26 @@ When prefix argument is negative
     ad-do-it))
 
 ;; hexl mode integration
-(defun vlf-hexl-before (&optional operation)
+(defun vlf-hexl-disable (&optional operation)
   "Temporarily disable `hexl-mode' for OPERATION."
-  (when (derived-mode-p 'hexl-mode)
+  (when (and (derived-mode-p 'hexl-mode)
+             (or (not operation)
+                 (eq operation 'write)))
+    (if (consp buffer-undo-list)
+        (setq buffer-undo-list nil))
     (hexl-mode-exit)
     (set (make-local-variable 'vlf-restore-hexl-mode) operation)))
 
-(defun vlf-hexl-after (&optional operation)
-  "Re-enable `hexl-mode' if active before OPERATION."
-  (when (and (boundp 'vlf-restore-hexl-mode)
-             (eq vlf-restore-hexl-mode operation))
+(defun vlf-hexl-enable (&optional _operation)
+  "Re-enable `hexl-mode' if active before _OPERATION."
+  (when (boundp 'vlf-restore-hexl-mode)
     (hexl-mode)
     (kill-local-variable 'vlf-restore-hexl-mode)))
 
-(add-hook 'vlf-before-batch-functions 'vlf-hexl-before)
-(add-hook 'vlf-after-batch-functions 'vlf-hexl-after)
-(add-hook 'vlf-before-chunk-update 'vlf-hexl-before)
-(add-hook 'vlf-after-chunk-update 'vlf-hexl-after)
+(add-hook 'vlf-before-batch-functions 'vlf-hexl-disable)
+(add-hook 'vlf-after-batch-functions 'vlf-hexl-enable)
+(add-hook 'vlf-before-chunk-update 'vlf-hexl-disable)
+(add-hook 'vlf-after-chunk-update 'vlf-hexl-enable)
 
 (eval-after-load "hexl"
   '(progn
