@@ -29,6 +29,10 @@
 (defgroup vlf nil "View Large Files in Emacs."
   :prefix "vlf-" :group 'files)
 
+(defcustom vlf-batch-size 1024
+  "Defines how large each batch of file data initially is (in bytes)."
+  :group 'vlf :type 'integer)
+
 (defcustom vlf-application 'ask
   "Determines when `vlf' will be offered on opening files.
 Possible values are: nil to never use it;
@@ -98,7 +102,8 @@ OP-TYPE specifies the file operation being performed over FILENAME."
     (vlf filename)
     (error ""))
    ((and large-file-warning-threshold
-         (< large-file-warning-threshold size))
+         (< large-file-warning-threshold size)
+         (< vlf-batch-size size))
     (if (eq vlf-application 'dont-ask)
         (progn (vlf filename)
                (error ""))

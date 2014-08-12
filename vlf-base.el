@@ -28,7 +28,7 @@
 ;;; Code:
 
 (defcustom vlf-batch-size 1024
-  "Defines how large each batch of file data is (in bytes)."
+  "Defines how large each batch of file data initially is (in bytes)."
   :group 'vlf :type 'integer)
 (put 'vlf-batch-size 'permanent-local t)
 
@@ -108,8 +108,7 @@ bytes added to the end."
                           0)))
              (setq vlf-start-pos place
                    vlf-end-pos place)
-             (if (not minimal)
-                 (vlf-update-buffer-name))
+             (or minimal (vlf-update-buffer-name))
              (cons (- start place) (- place end)))))
         ((or (/= start vlf-start-pos)
              (/= end vlf-end-pos))
