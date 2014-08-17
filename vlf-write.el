@@ -37,37 +37,43 @@ If changing size of chunk, shift remaining file content."
              (or (verify-visited-file-modtime (current-buffer))
                  (y-or-n-p "File has changed since visited or saved.\
   Save anyway? ")))
+    (widen)
     (run-hook-with-args 'vlf-before-batch-functions 'write)
-    (if (zerop vlf-file-size)           ;new file
-        (progn (write-region nil nil buffer-file-name vlf-start-pos t)
-               (setq vlf-file-size (vlf-get-file-size
-                                    buffer-file-truename)
-                     vlf-end-pos vlf-file-size)
-               (vlf-update-buffer-name))
-      (widen)
-      (let* ((region-length (length (encode-coding-region
-                                     (point-min) (point-max)
-                                     buffer-file-coding-system t)))
-             (size-change (- vlf-end-pos vlf-start-pos
-                             region-length)))
-        (if (zerop size-change)
-            (write-region nil nil buffer-file-name vlf-start-pos t)
-          (let ((tramp-verbose (if (boundp 'tramp-verbose)
-                                   (min tramp-verbose 2)))
-                (pos (point))
-                (font-lock font-lock-mode))
-            (font-lock-mode 0)
-            (if (< 0 size-change)
-                (vlf-file-shift-back size-change)
-              (vlf-file-shift-forward (- size-change)))
-            (if font-lock (font-lock-mode 1))
-            (vlf-move-to-chunk-2 vlf-start-pos
-                                 (if (< (- vlf-end-pos vlf-start-pos)
-                                        vlf-batch-size)
-                                     (+ vlf-start-pos vlf-batch-size)
-                                   vlf-end-pos))
-            (vlf-update-buffer-name)
-            (goto-char pos)))))
+    (let ((hexl (derived-mode-p 'hexl-mode)))
+      (when hexl
+        (if (consp buffer-undo-list)
+            (setq buffer-undo-list nil))
+        (hexl-mode-exit))
+      (if (zerop vlf-file-size)           ;new file
+          (progn (write-region nil nil buffer-file-name vlf-start-pos t)
+                 (setq vlf-file-size (vlf-get-file-size
+                                      buffer-file-truename)
+                       vlf-end-pos vlf-file-size)
+                 (vlf-update-buffer-name))
+        (let* ((region-length (length (encode-coding-region
+                                       (point-min) (point-max)
+                                       buffer-file-coding-system t)))
+               (size-change (- vlf-end-pos vlf-start-pos
+                               region-length)))
+          (if (zerop size-change)
+              (write-region nil nil buffer-file-name vlf-start-pos t)
+            (let ((tramp-verbose (if (boundp 'tramp-verbose)
+                                     (min tramp-verbose 2)))
+                  (pos (point))
+                  (font-lock font-lock-mode))
+              (font-lock-mode 0)
+              (if (< 0 size-change)
+                  (vlf-file-shift-back size-change)
+                (vlf-file-shift-forward (- size-change)))
+              (if font-lock (font-lock-mode 1))
+              (vlf-move-to-chunk-2 vlf-start-pos
+                                   (if (< (- vlf-end-pos vlf-start-pos)
+                                          vlf-batch-size)
+                                       (+ vlf-start-pos vlf-batch-size)
+                                     vlf-end-pos))
+              (vlf-update-buffer-name)
+              (goto-char pos)))))
+      (if hexl (hexl-mode)))
     (run-hook-with-args 'vlf-after-batch-functions 'write))
   t)
 

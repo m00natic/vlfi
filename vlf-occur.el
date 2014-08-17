@@ -124,14 +124,19 @@ Prematurely ending indexing will still show what's found so far."
   (if (buffer-modified-p) ;use temporary buffer not to interfere with modifications
       (let ((vlf-buffer (current-buffer))
             (file buffer-file-name)
-            (batch-size vlf-batch-size))
+            (batch-size vlf-batch-size)
+            (is-hexl (derived-mode-p 'hexl-mode)))
         (with-temp-buffer
-          (setq buffer-file-name file)
+          (setq buffer-file-name file
+                buffer-file-truename file
+                buffer-undo-list t)
           (set-buffer-modified-p nil)
           (set (make-local-variable 'vlf-batch-size) batch-size)
           (vlf-mode 1)
-          (goto-char (point-min))
+          (if is-hexl
+              (hexl-mode))
           (run-hook-with-args 'vlf-before-batch-functions 'occur)
+          (goto-char (point-min))
           (vlf-with-undo-disabled
            (vlf-build-occur regexp vlf-buffer))
           (run-hook-with-args 'vlf-after-batch-functions 'occur)))
@@ -170,6 +175,8 @@ Prematurely ending indexing will still show what's found so far."
         (reporter (make-progress-reporter
                    (concat "Building index for " regexp "...")
                    vlf-start-pos vlf-file-size)))
+    (with-current-buffer occur-buffer
+      (setq buffer-undo-list t))
     (unwind-protect
         (progn
           (while (not end-of-file)

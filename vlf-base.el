@@ -125,11 +125,17 @@ bytes added to the end."
   (let* ((modified (buffer-modified-p))
          (start (max 0 start))
          (end (min end vlf-file-size))
+         (hexl (derived-mode-p 'hexl-mode))
+         (restore-hexl nil)
          (edit-end (if modified
-                       (+ vlf-start-pos
-                          (length (encode-coding-region
-                                   (point-min) (point-max)
-                                   buffer-file-coding-system t)))
+                       (progn
+                         (when hexl
+                           (hexl-mode-exit)
+                           (setq restore-hexl t))
+                         (+ vlf-start-pos
+                            (length (encode-coding-region
+                                     (point-min) (point-max)
+                                     buffer-file-coding-system t))))
                      vlf-end-pos)))
     (cond
      ((or (< edit-end start) (< end vlf-start-pos)
@@ -137,13 +143,22 @@ bytes added to the end."
       (when (or (not modified)
                 (y-or-n-p "Chunk modified, are you sure? ")) ;full chunk renewal
         (set-buffer-modified-p nil)
-        (vlf-move-to-chunk-2 start end)))
+        (let ((shifts (vlf-move-to-chunk-2 start end)))
+          (if restore-hexl (hexl-mode))
+          shifts)))
      ((and (= start vlf-start-pos) (= end edit-end))
-      (or modified (vlf-move-to-chunk-2 start end)))
+      (unless modified
+        (let ((shifts (vlf-move-to-chunk-2 start end)))
+          (if restore-hexl (hexl-mode))
+          shifts)))
      ((or (and (<= start vlf-start-pos) (<= edit-end end))
           (not modified)
           (y-or-n-p "Chunk modified, are you sure? "))
       (run-hooks 'vlf-before-chunk-update)
+      (when (and hexl (not restore-hexl))
+        (if (consp buffer-undo-list)
+            (setq buffer-undo-list nil))
+        (hexl-mode-exit))
       (let ((shift-start 0)
             (shift-end 0))
         (let ((pos (+ (position-bytes (point)) vlf-start-pos))
@@ -202,8 +217,11 @@ bytes added to the end."
           (setq vlf-start-pos start))
         (set-buffer-modified-p modified)
         (set-visited-file-modtime)
+        (if hexl (hexl-mode))
         (run-hooks 'vlf-after-chunk-update)
-        (cons shift-start shift-end))))))
+        (cons shift-start shift-end)))
+     (restore-hexl (hexl-mode)
+                   nil))))
 
 (defun vlf-move-to-chunk-2 (start end)
   "Unconditionally move to chunk enclosed by START END bytes.
@@ -217,11 +235,14 @@ bytes added to the end."
     (let ((inhibit-read-only t)
           (pos (position-bytes (point))))
       (vlf-with-undo-disabled
-       (erase-buffer)
-       (setq shifts (vlf-insert-file-contents vlf-start-pos
-                                              vlf-end-pos t t)
-             vlf-start-pos (- vlf-start-pos (car shifts))
-             vlf-end-pos (+ vlf-end-pos (cdr shifts)))
+       (let ((hexl (derived-mode-p 'hexl-mode)))
+         (if hexl (hexl-mode-exit t))
+         (erase-buffer)
+         (setq shifts (vlf-insert-file-contents vlf-start-pos
+                                                vlf-end-pos t t)
+               vlf-start-pos (- vlf-start-pos (car shifts))
+               vlf-end-pos (+ vlf-end-pos (cdr shifts)))
+         (if hexl (hexl-mode)))
        (goto-char (or (byte-to-position (+ pos (car shifts)))
                       (point-max)))))
     (set-buffer-modified-p nil)
