@@ -141,6 +141,10 @@ beforehand.
 that even if you prematurely stop it with *C-g*, it will still show
 index of what's found so far.
 
+Result buffer uses *vlf-occur-mode* which allows to optionally open
+new VLF buffer on jump to match (using *C-u* before hitting RET or
+*o*).  Also results can be serialized to file for later reuse.
+
 ** Jump to line
 
 *C-c C-v l* jumps to given line in file.  This is done by searching

@@ -29,6 +29,21 @@
 
 (require 'vlf)
 
+(defvar vlf-occur-vlf-file nil "VLF file that is searched.")
+(make-variable-buffer-local 'vlf-occur-vlf-file)
+
+(defvar vlf-occur-vlf-buffer nil "VLF buffer that is scanned.")
+(make-variable-buffer-local 'vlf-occur-vlf-buffer)
+
+(defvar vlf-occur-regexp)
+(make-variable-buffer-local 'vlf-occur-regexp)
+
+(defvar vlf-occur-hexl nil "Is `hexl-mode' active?")
+(make-variable-buffer-local 'vlf-occur-hexl)
+
+(defvar vlf-occur-lines 0 "Number of lines scanned by `vlf-occur'.")
+(make-variable-buffer-local 'vlf-occur-lines)
+
 (defvar vlf-occur-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "n" 'vlf-occur-next-match)
@@ -37,16 +52,18 @@
     (define-key map "\M-\r" 'vlf-occur-visit-new-buffer)
     (define-key map [mouse-1] 'vlf-occur-visit)
     (define-key map "o" 'vlf-occur-show)
+    (define-key map [remap save-buffer] 'vlf-occur-save)
     map)
   "Keymap for command `vlf-occur-mode'.")
 
 (define-derived-mode vlf-occur-mode special-mode "VLF[occur]"
-  "Major mode for showing occur matches of VLF opened files.")
+  "Major mode for showing occur matches of VLF opened files."
+  (add-hook 'write-file-functions 'vlf-occur-save nil t))
 
 (defun vlf-occur-next-match ()
   "Move cursor to next match."
   (interactive)
-  (if (eq (get-char-property (point) 'face) 'match)
+  (if (eq (get-text-property (point) 'face) 'match)
       (goto-char (next-single-property-change (point) 'face)))
   (goto-char (or (text-property-any (point) (point-max) 'face 'match)
                  (text-property-any (point-min) (point)
@@ -55,9 +72,9 @@
 (defun vlf-occur-prev-match ()
   "Move cursor to previous match."
   (interactive)
-  (if (eq (get-char-property (point) 'face) 'match)
+  (if (eq (get-text-property (point) 'face) 'match)
       (goto-char (previous-single-property-change (point) 'face)))
-  (while (not (eq (get-char-property (point) 'face) 'match))
+  (while (not (eq (get-text-property (point) 'face) 'match))
     (goto-char (or (previous-single-property-change (point) 'face)
                    (point-max)))))
 
@@ -91,26 +108,38 @@ EVENT may hold details of the invocation."
     (goto-char (posn-point (event-end event))))
   (let* ((pos (point))
          (pos-relative (- pos (line-beginning-position) 1))
-         (file (get-char-property pos 'file)))
-    (if file
-        (let ((chunk-start (get-char-property pos 'chunk-start))
-              (chunk-end (get-char-property pos 'chunk-end))
-              (vlf-buffer (get-char-property pos 'buffer))
+         (chunk-start (get-text-property pos 'chunk-start)))
+    (if chunk-start
+        (let ((chunk-end (get-text-property pos 'chunk-end))
+              (file (if (file-exists-p vlf-occur-vlf-file)
+                        vlf-occur-vlf-file
+                      (setq vlf-occur-vlf-file
+                            (read-file-name
+                             (concat vlf-occur-vlf-file
+                                     " doesn't exist, locate it: ")))))
+              (vlf-buffer vlf-occur-vlf-buffer)
+              (not-hexl (not vlf-occur-hexl))
               (occur-buffer (current-buffer))
-              (match-pos (+ (get-char-property pos 'line-pos)
+              (match-pos (+ (get-text-property pos 'line-pos)
                             pos-relative)))
           (cond (current-prefix-arg
                  (setq vlf-buffer (vlf file))
+                 (or not-hexl (hexl-mode))
                  (switch-to-buffer occur-buffer))
                 ((not (buffer-live-p vlf-buffer))
-                 (or (catch 'found
-                       (dolist (buf (buffer-list))
-                         (set-buffer buf)
-                         (and vlf-mode (equal file buffer-file-name)
-                              (setq vlf-buffer buf)
-                              (throw 'found t))))
-                     (setq vlf-buffer (vlf file)))
-                 (switch-to-buffer occur-buffer)))
+                 (unless (catch 'found
+                           (dolist (buf (buffer-list))
+                             (set-buffer buf)
+                             (and vlf-mode
+                                  (equal file buffer-file-name)
+                                  (eq (not (derived-mode-p 'hexl-mode))
+                                      not-hexl)
+                                  (setq vlf-buffer buf)
+                                  (throw 'found t))))
+                   (setq vlf-buffer (vlf file))
+                   (or not-hexl (hexl-mode)))
+                 (switch-to-buffer occur-buffer)
+                 (setq vlf-occur-vlf-buffer vlf-buffer)))
           (pop-to-buffer vlf-buffer)
           (vlf-move-to-chunk chunk-start chunk-end)
           (goto-char match-pos)))))
@@ -160,7 +189,6 @@ Prematurely ending indexing will still show what's found so far."
         (line 1)
         (last-match-line 0)
         (last-line-pos (point-min))
-        (file buffer-file-name)
         (total-matches 0)
         (match-end-pos (+ vlf-start-pos (position-bytes (point))))
         (occur-buffer (generate-new-buffer
@@ -205,8 +233,6 @@ Prematurely ending indexing will still show what's found so far."
                                           (number-to-string line)
                                           'face 'shadow)))
                           (insert (propertize line-text ; insert line
-                                              'file file
-                                              'buffer vlf-buffer
                                               'chunk-start chunk-start
                                               'chunk-end chunk-end
                                               'mouse-face '(highlight)
@@ -240,27 +266,131 @@ Prematurely ending indexing will still show what's found so far."
                                (point-min)
                              (or (byte-to-position (- match-end-pos
                                                       vlf-start-pos))
-                                   (point-min))))
+                                 (point-min))))
                 (setq last-match-line 0
                       last-line-pos (line-beginning-position))
                 (progress-reporter-update reporter vlf-end-pos))))
           (progress-reporter-done reporter))
       (set-buffer-modified-p nil)
       (if (zerop total-matches)
-          (progn (with-current-buffer occur-buffer
-                   (set-buffer-modified-p nil))
-                 (kill-buffer occur-buffer)
+          (progn (kill-buffer occur-buffer)
                  (message "No matches for \"%s\"" regexp))
-        (with-current-buffer occur-buffer
-          (goto-char (point-min))
-          (insert (propertize
-                   (format "%d matches from %d lines for \"%s\" \
+        (let ((file buffer-file-name)
+              (dir default-directory))
+          (with-current-buffer occur-buffer
+            (goto-char (point-min))
+            (insert (propertize
+                     (format "%d matches from %d lines for \"%s\" \
 in file: %s" total-matches line regexp file)
-                   'face 'underline))
-          (set-buffer-modified-p nil)
-          (forward-char 2)
-          (vlf-occur-mode))
+                     'face 'underline))
+            (set-buffer-modified-p nil)
+            (forward-char 2)
+            (vlf-occur-mode)
+            (setq default-directory dir
+                  vlf-occur-vlf-file file
+                  vlf-occur-vlf-buffer vlf-buffer
+                  vlf-occur-regexp regexp
+                  vlf-occur-hexl is-hexl
+                  vlf-occur-lines line)))
         (display-buffer occur-buffer)))))
+
+
+;; save, load vlf-occur data
+
+(defun vlf-occur-save (file)
+  "Serialize `vlf-occur' results to FILE which can later be reloaded."
+  (interactive (list (or buffer-file-name
+                         (read-file-name "Save vlf-occur results in: "
+                                         nil nil nil
+                                         (concat
+                                          (file-name-nondirectory
+                                           vlf-occur-vlf-file)
+                                          ".vlfo")))))
+  (setq buffer-file-name file)
+  (let ((vlf-occur-save-buffer
+         (generate-new-buffer (concat "*VLF-occur-save "
+                                      (file-name-nondirectory file)
+                                      "*"))))
+    (with-current-buffer vlf-occur-save-buffer
+      (setq buffer-file-name file
+            buffer-undo-list t)
+      (insert ";; -*- eval: (vlf-occur-load) -*-\n"))
+    (prin1 (list vlf-occur-vlf-file vlf-occur-regexp vlf-occur-hexl
+                 vlf-occur-lines)
+           vlf-occur-save-buffer)
+    (save-excursion
+      (goto-char (point-min))
+      (while (zerop (forward-line))
+        (let* ((pos (1+ (point)))
+               (line (get-char-property (1- pos) 'before-string)))
+          (if line
+              (prin1 (list (string-to-number line)
+                           (get-text-property pos 'chunk-start)
+                           (get-text-property pos 'chunk-end)
+                           (get-text-property pos 'line-pos)
+                           (buffer-substring-no-properties
+                            pos (line-end-position)))
+                     vlf-occur-save-buffer)))))
+    (with-current-buffer vlf-occur-save-buffer
+      (save-buffer))
+    (kill-buffer vlf-occur-save-buffer))
+  t)
+
+;;;###autoload
+(defun vlf-occur-load ()
+  "Load serialized `vlf-occur' results from current buffer."
+  (interactive)
+  (goto-char (point-min))
+  (let* ((vlf-occur-data-buffer (current-buffer))
+         (header (read vlf-occur-data-buffer))
+         (vlf-file (nth 0 header))
+         (regexp (nth 1 header))
+         (all-lines (nth 3 header))
+         (file buffer-file-name)
+         (vlf-occur-buffer
+          (generate-new-buffer (concat "*VLF-occur "
+                                       (file-name-nondirectory file)
+                                       "*"))))
+    (switch-to-buffer vlf-occur-buffer)
+    (setq buffer-file-name file
+          buffer-undo-list t)
+    (goto-char (point-min))
+    (let ((match-count 0)
+          (form 0))
+      (while (setq form (ignore-errors (read vlf-occur-data-buffer)))
+        (goto-char (point-max))
+        (insert "\n:")
+        (let* ((overlay-pos (1- (point)))
+               (overlay (make-overlay overlay-pos (1+ overlay-pos)))
+               (line (number-to-string (nth 0 form)))
+               (pos (point)))
+          (overlay-put overlay 'before-string
+                       (propertize line 'face 'shadow))
+          (insert (propertize (nth 4 form) 'chunk-start (nth 1 form)
+                              'chunk-end (nth 2 form)
+                              'mouse-face '(highlight)
+                              'line-pos (nth 3 form)
+                              'help-echo (concat "Move to line "
+                                                 line)))
+          (goto-char pos)
+          (while (re-search-forward regexp nil t)
+            (add-text-properties
+             (match-beginning 0) (match-end 0)
+             (list 'face 'match 'help-echo
+                   (format "Move to match %d"
+                           (setq match-count (1+ match-count))))))))
+      (kill-buffer vlf-occur-data-buffer)
+      (goto-char (point-min))
+      (insert (propertize
+               (format "%d matches from %d lines for \"%s\" in file: %s"
+                       match-count all-lines regexp vlf-file)
+               'face 'underline)))
+    (set-buffer-modified-p nil)
+    (vlf-occur-mode)
+    (setq vlf-occur-vlf-file vlf-file
+          vlf-occur-regexp regexp
+          vlf-occur-hexl (nth 2 header)
+          vlf-occur-lines all-lines)))
 
 (provide 'vlf-occur)
 
