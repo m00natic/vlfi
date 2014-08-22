@@ -123,7 +123,7 @@ EVENT may hold details of the invocation."
               (match-pos (+ (get-text-property pos 'line-pos)
                             pos-relative)))
           (cond (current-prefix-arg
-                 (setq vlf-buffer (vlf file))
+                 (setq vlf-buffer (vlf file t))
                  (or not-hexl (hexl-mode))
                  (switch-to-buffer occur-buffer))
                 ((not (buffer-live-p vlf-buffer))
@@ -136,7 +136,7 @@ EVENT may hold details of the invocation."
                                       not-hexl)
                                   (setq vlf-buffer buf)
                                   (throw 'found t))))
-                   (setq vlf-buffer (vlf file))
+                   (setq vlf-buffer (vlf file t))
                    (or not-hexl (hexl-mode)))
                  (switch-to-buffer occur-buffer)
                  (setq vlf-occur-vlf-buffer vlf-buffer)))

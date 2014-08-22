@@ -27,7 +27,7 @@
 
 ;;; Code:
 
-(defcustom vlf-batch-size 1024
+(defcustom vlf-batch-size 1000000
   "Defines how large each batch of file data initially is (in bytes)."
   :group 'vlf :type 'integer)
 (put 'vlf-batch-size 'permanent-local t)

@@ -145,17 +145,22 @@ values are: `write', `ediff', `occur', `search', `goto-line'."
   (setq vlf-mode t))
 
 ;;;###autoload
-(defun vlf (file)
-  "View Large FILE in batches.
+(defun vlf (file &optional minimal)
+  "View Large FILE in batches.  When MINIMAL load just a few bytes.
 You can customize number of bytes displayed by customizing
 `vlf-batch-size'.
 Return newly created buffer."
-  (interactive "fFile to open: ")
+  (interactive (list (read-file-name "File to open: ") nil))
   (let ((vlf-buffer (generate-new-buffer "*vlf*")))
     (set-buffer vlf-buffer)
     (set-visited-file-name file)
     (set-buffer-modified-p nil)
+    (if (or minimal (file-remote-p file))
+        (set (make-local-variable 'vlf-batch-size) 1024))
     (vlf-mode 1)
+    (when minimal                 ;restore batch size to default value
+      (kill-local-variable 'vlf-batch-size)
+      (make-local-variable 'vlf-batch-size))
     (switch-to-buffer vlf-buffer)
     vlf-buffer))
 
@@ -263,8 +268,8 @@ with the prefix argument DECREASE it is halved."
   (vlf-verify-size)
   (vlf-move-to-batch vlf-file-size))
 
-(defun vlf-revert (&optional _ignore-auto noconfirm)
-  "Revert current chunk.  Ignore _IGNORE-AUTO.
+(defun vlf-revert (&optional _auto noconfirm)
+  "Revert current chunk.  Ignore _AUTO.
 Ask for confirmation if NOCONFIRM is nil."
   (interactive)
   (when (or noconfirm

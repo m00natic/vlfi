@@ -34,7 +34,6 @@
   "If non nil, specifies that ediff is done over VLF buffers.")
 (make-variable-buffer-local 'vlf-ediff-session)
 
-;;;###autoload
 (defun vlf-ediff-buffers (buffer-A buffer-B)
   "Run batch by batch ediff over VLF buffers BUFFER-A and BUFFER-B.
 Batch size is determined by the size in BUFFER-A.
@@ -93,10 +92,10 @@ respectively of difference list, runs ediff over the adjacent chunks."
                                       dir-B)))
                                    (ediff-get-default-file-name f 1)))
            (read-number "Batch size (in bytes): " vlf-batch-size))))
-  (let ((buffer-A (vlf file-A)))
+  (let ((buffer-A (vlf file-A t)))
     (set-buffer buffer-A)
     (vlf-set-batch-size batch-size)
-    (let ((buffer-B (vlf file-B)))
+    (let ((buffer-B (vlf file-B t)))
       (vlf-ediff-buffers buffer-A buffer-B))))
 
 (defadvice ediff-next-difference (around vlf-ediff-next-difference
