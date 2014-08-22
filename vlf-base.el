@@ -126,12 +126,14 @@ bytes added to the end."
          (start (max 0 start))
          (end (min end vlf-file-size))
          (hexl (derived-mode-p 'hexl-mode))
-         (restore-hexl nil)
+         restore-hexl hexl-undo-list
          (edit-end (if modified
                        (progn
                          (when hexl
-                           (hexl-mode-exit)
-                           (setq restore-hexl t))
+                           (setq restore-hexl t
+                                 hexl-undo-list buffer-undo-list
+                                 buffer-undo-list t)
+                           (hexl-mode-exit))
                          (+ vlf-start-pos
                             (length (encode-coding-region
                                      (point-min) (point-max)
@@ -144,10 +146,14 @@ bytes added to the end."
             (when (or (not modified)
                       (y-or-n-p "Chunk modified, are you sure? ")) ;full chunk renewal
               (set-buffer-modified-p nil)
+              (if (consp hexl-undo-list)
+                  (setq hexl-undo-list nil))
               (vlf-move-to-chunk-2 start end)))
            ((and (= start vlf-start-pos) (= end edit-end))
-            (or modified
-                (vlf-move-to-chunk-2 start end)))
+            (unless modified
+              (if (consp hexl-undo-list)
+                  (setq hexl-undo-list nil))
+              (vlf-move-to-chunk-2 start end)))
            ((or (and (<= start vlf-start-pos) (<= edit-end end))
                 (not modified)
                 (y-or-n-p "Chunk modified, are you sure? "))
@@ -222,7 +228,9 @@ bytes added to the end."
                 (setq restore-hexl nil))
               (run-hooks 'vlf-after-chunk-update)
               (cons shift-start shift-end))))))
-    (if restore-hexl (hexl-mode))
+    (when restore-hexl
+      (hexl-mode)
+      (setq buffer-undo-list hexl-undo-list))
     shifts))
 
 (defun vlf-move-to-chunk-2 (start end)
