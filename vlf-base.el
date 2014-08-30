@@ -27,6 +27,8 @@
 
 ;;; Code:
 
+(require 'vlf-tune)
+
 (defcustom vlf-batch-size 1000000
   "Defines how large each batch of file data initially is (in bytes)."
   :group 'vlf :type 'integer)
@@ -133,11 +135,10 @@ bytes added to the end."
                            (setq restore-hexl t
                                  hexl-undo-list buffer-undo-list
                                  buffer-undo-list t)
-                           (hexl-mode-exit))
+                           (vlf-tune-dehexlify))
                          (+ vlf-start-pos
-                            (length (encode-coding-region
-                                     (point-min) (point-max)
-                                     buffer-file-coding-system t))))
+                            (vlf-tune-encode-length (point-min)
+                                                    (point-max))))
                      vlf-end-pos))
          (shifts
           (cond
@@ -161,7 +162,7 @@ bytes added to the end."
             (when (and hexl (not restore-hexl))
               (if (consp buffer-undo-list)
                   (setq buffer-undo-list nil))
-              (hexl-mode-exit))
+              (vlf-tune-dehexlify))
             (let ((shift-start 0)
                   (shift-end 0))
               (let ((pos (+ (position-bytes (point)) vlf-start-pos))
@@ -224,12 +225,12 @@ bytes added to the end."
               (set-buffer-modified-p modified)
               (set-visited-file-modtime)
               (when hexl
-                (hexl-mode)
+                (vlf-tune-hexlify)
                 (setq restore-hexl nil))
               (run-hooks 'vlf-after-chunk-update)
               (cons shift-start shift-end))))))
     (when restore-hexl
-      (hexl-mode)
+      (vlf-tune-hexlify)
       (setq buffer-undo-list hexl-undo-list))
     shifts))
 
@@ -252,7 +253,7 @@ bytes added to the end."
                                                 vlf-end-pos t t)
                vlf-start-pos (- vlf-start-pos (car shifts))
                vlf-end-pos (+ vlf-end-pos (cdr shifts)))
-         (if hexl (hexl-mode)))
+         (if hexl (vlf-tune-hexlify)))
        (goto-char (or (byte-to-position (+ pos (car shifts)))
                       (point-max)))))
     (set-buffer-modified-p nil)
@@ -293,7 +294,7 @@ bytes added to the end."
 
 (defun vlf-insert-file-contents-1 (start end)
   "Extract decoded file bytes START to END."
-  (insert-file-contents buffer-file-name nil start end))
+  (vlf-tune-insert-file-contents start end))
 
 (defun vlf-adjust-start (start end position adjust-end)
   "Adjust chunk beginning at absolute START to END till content can\
@@ -311,10 +312,8 @@ Return number of bytes moved back for proper decoding."
                        (not (zerop safe-start)))
                 (< shift 3)
                 (let ((diff (- chunk-size
-                               (length
-                                (encode-coding-region
-                                 position (point-max)
-                                 buffer-file-coding-system t)))))
+                               (vlf-tune-encode-length position
+                                                       (point-max)))))
                   (if strict
                       (not (zerop diff))
                     (or (< diff -3) (< 0 diff)))))
@@ -345,12 +344,10 @@ which deletion was performed."
                               (eq encode-direction 'end)
                             (< (- end border) (- border start))))
          (dist (if encode-from-end
-                   (- end (length (encode-coding-region
-                                   cut-point (point-max)
-                                   buffer-file-coding-system t)))
-                 (+ start (length (encode-coding-region
-                                   position cut-point
-                                   buffer-file-coding-system t)))))
+                   (- end (vlf-tune-encode-length cut-point
+                                                  (point-max)))
+                 (+ start (vlf-tune-encode-length position
+                                                  cut-point))))
          (len 0))
     (if (< border dist)
         (while (< border dist)
@@ -378,7 +375,7 @@ which deletion was performed."
 
 (defun vlf-shift-undo-list (n)
   "Shift undo list element regions by N."
-  (or (eq buffer-undo-list t)
+  (or (null buffer-undo-list) (eq buffer-undo-list t)
       (setq buffer-undo-list
             (nreverse
              (let ((min (point-min))

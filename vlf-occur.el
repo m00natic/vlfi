@@ -124,7 +124,7 @@ EVENT may hold details of the invocation."
                             pos-relative)))
           (cond (current-prefix-arg
                  (setq vlf-buffer (vlf file t))
-                 (or not-hexl (hexl-mode))
+                 (or not-hexl (vlf-tune-hexlify))
                  (switch-to-buffer occur-buffer))
                 ((not (buffer-live-p vlf-buffer))
                  (unless (catch 'found
@@ -137,7 +137,7 @@ EVENT may hold details of the invocation."
                                   (setq vlf-buffer buf)
                                   (throw 'found t))))
                    (setq vlf-buffer (vlf file t))
-                   (or not-hexl (hexl-mode)))
+                   (or not-hexl (vlf-tune-hexlify)))
                  (switch-to-buffer occur-buffer)
                  (setq vlf-occur-vlf-buffer vlf-buffer)))
           (pop-to-buffer vlf-buffer)
@@ -162,8 +162,7 @@ Prematurely ending indexing will still show what's found so far."
           (set-buffer-modified-p nil)
           (set (make-local-variable 'vlf-batch-size) batch-size)
           (vlf-mode 1)
-          (if is-hexl
-              (hexl-mode))
+          (if is-hexl (vlf-tune-hexlify))
           (run-hook-with-args 'vlf-before-batch-functions 'occur)
           (goto-char (point-min))
           (vlf-with-undo-disabled

@@ -213,8 +213,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                    (while (and (< (- end start) n)
                                (< n (- vlf-file-size start)))
                      (erase-buffer)
-                     (insert-file-contents-literally buffer-file-name
-                                                     nil start end)
+                     (vlf-tune-insert-file-contents-literally start end)
                      (goto-char (point-min))
                      (while (re-search-forward "[\n\C-m]" nil t)
                        (setq n (1- n)))
@@ -239,8 +238,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
              (or is-hexl
                  (while (and (< (- end start) n) (< n end))
                    (erase-buffer)
-                   (insert-file-contents-literally buffer-file-name
-                                                   nil start end)
+                   (vlf-tune-insert-file-contents-literally start end)
                    (goto-char (point-max))
                    (while (re-search-backward "[\n\C-m]" nil t)
                      (setq n (1- n)))
