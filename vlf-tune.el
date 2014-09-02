@@ -36,6 +36,10 @@ but don't change batch size.  If t, measure and change."
                              (const :tag "Just statistics" stats)
                              (const :tag "Disabled" nil)))
 
+(defvar vlf-file-size 0 "Total size of presented file.")
+(make-variable-buffer-local 'vlf-file-size)
+(put 'vlf-file-size 'permanent-local t)
+
 (defun vlf-tune-ram-size ()
   "Try to determine RAM size in bytes."
   (let* ((free-output (shell-command-to-string "free"))
@@ -58,7 +62,7 @@ but don't change batch size.  If t, measure and change."
 (defvar vlf-tune-insert-bps nil
   "Vector of bytes per second insert measurements.")
 (make-variable-buffer-local 'vlf-tune-insert-bps)
-(put 'vlf-batch-size 'permanent-local t)
+(put 'vlf-tune-insert-bps 'permanent-local t)
 
 (defvar vlf-tune-insert-raw-bps nil
   "Vector of bytes per second non-decode insert measurements.")
@@ -89,13 +93,17 @@ but don't change batch size.  If t, measure and change."
   "Initialize measurement vector."
   (make-vector (1- (/ vlf-tune-max vlf-tune-step)) '(0 . 0)))
 
+(defun vlf-tune-closest-index (size)
+  "Get closest measurement index corresponding to SIZE."
+  (max 0 (1- (min (round size vlf-tune-step)
+                  (/ vlf-tune-max vlf-tune-step)))))
+
 (defmacro vlf-tune-add-measurement (vec size time)
   "Add at an appropriate position in VEC new SIZE TIME measurement.
 VEC is a vector of (mean time . count) elements ordered by size."
   `(when vlf-tune-enabled
      (or ,vec (setq ,vec (vlf-tune-initialize-measurement)))
-     (let* ((idx (max 0 (1- (min (round ,size vlf-tune-step) ;closest index
-                                 (/ vlf-tune-max vlf-tune-step)))))
+     (let* ((idx (vlf-tune-closest-index ,size))
             (existing (aref ,vec idx)))
        (aset ,vec idx (let ((count (1+ (cdr existing)))) ;recalculate mean
                         (cons (/ (+ (* (1- count) (car existing))
@@ -131,7 +139,7 @@ VEC is a vector of (mean time . count) elements ordered by size."
                                    start end
                                    buffer-file-coding-system t)))))
     (vlf-tune-add-measurement vlf-tune-encode-bps
-                              (- end start) (car result))
+                              (cdr result) (car result))
     (cdr result)))
 
 (defun vlf-tune-write (start end append visit size)
@@ -153,6 +161,102 @@ SIZE is number of bytes that are saved."
   (let ((time (car (vlf-time (hexl-mode-exit)))))
     (vlf-tune-add-measurement vlf-tune-dehexlify-bps
                               hexl-max-address time)))
+
+(defun vlf-tune-assess (type coef index)
+  "Get measurement value according to TYPE, COEF and INDEX."
+  (* coef (cond ((eq type :insert)
+                 (aref vlf-tune-insert-bps index))
+                ((eq type :raw)
+                 (aref vlf-tune-insert-raw-bps index))
+                ((eq type :encode) ;encode size is less than batch size
+                 (let ((val (aref vlf-tune-encode-bps index)))
+                   (while (and (null val) (< 0 index)) ;find smaller index
+                     (setq index (1- index)
+                           val (aref vlf-tune-encode-bps index)))
+                   val))
+                ((eq type :write)
+                 (aref vlf-tune-write-bps index))
+                ((eq type :hexl)
+                 (aref vlf-tune-hexl-bps index))
+                ((eq type :dehexlify)
+                 (aref vlf-tune-dehexlify-bps index)))))
+
+(defun vlf-tune-score (types index)
+  "Get score of TYPES which is alist of (type coef) for INDEX."
+  (catch 'result
+    (let ((score 0))
+      (dolist (el types score)
+        (let ((sc (if (consp el)
+                      (vlf-tune-assess (car el) (cadr el) index)
+                    (vlf-tune-assess el 1 index))))
+          (if (zerop sc)
+              (throw 'result nil)
+            (setq score (+ score sc))))))))
+
+(defun vlf-tune-conservative (types &optional index)
+  "Adjust `vlf-batch-size' with `vlf-tune-step' in case of better score.
+Score is calculated over TYPES which is alist of form (type coef).
+INDEX if given, specifies search independent of current batch size."
+  (if (eq vlf-tune-enabled t)
+      (let* ((half-max (/ vlf-file-size 2))
+             (idx (or index (vlf-tune-closest-index vlf-batch-size)))
+             (curr (if (< half-max (* idx vlf-tune-step))
+                       t
+                     (vlf-tune-score types idx))))
+        (if (null curr)
+            (setq vlf-batch-size (* (1+ idx) vlf-tune-step))
+          (let ((next (if (or (eq curr t)
+                              (< half-max (* (1+ idx) vlf-tune-step)))
+                          t
+                        (vlf-tune-score types (1+ idx)))))
+            (if (null next)
+                (setq vlf-batch-size (* (+ idx 2) vlf-tune-step))
+              (let ((prev (if (zerop idx)
+                              t
+                            (vlf-tune-score types (1- idx)))))
+                (cond ((null prev)
+                       (setq vlf-batch-size (* idx vlf-tune-step)))
+                      ((eq curr t)
+                       (or (eq prev t)
+                           (setq vlf-batch-size (* idx
+                                                   vlf-tune-step))))
+                      (t (let ((best-idx idx))
+                           (and (numberp next) (< curr next)
+                                (setq curr next
+                                      best-idx (1+ idx)))
+                           (and (numberp prev) (< curr prev)
+                                (setq best-idx (1- idx)))
+                           (setq vlf-batch-size
+                                 (* (1+ best-idx)
+                                    vlf-tune-step))))))))))))
+
+(defun vlf-tune-best (types &optional min max)
+  "Adjust `vlf-batch-size' to optional value.
+Score is calculated over TYPES which is alist of form (type coef).
+MIN and MAX may specify interval of indexes to search."
+  (if (eq vlf-tune-enabled t)
+      (if (and (null min) (file-remote-p buffer-file-name))
+          (vlf-tune-conservative types)
+        (setq min (or min 0)
+              max (or max (1- (/ (min vlf-tune-max
+                                      (/ vlf-file-size 2))
+                                 vlf-tune-step))))
+        (if (< (- max min) 3)
+            (vlf-tune-conservative types (round (+ min max) 2))
+          (let* ((right-idx (+ min (round (* 2 (- max min)) 3)))
+                 (right (vlf-tune-score types right-idx)))
+            (if (null right)
+                (setq vlf-batch-size (* (1+ right-idx) vlf-tune-step))
+              (let* ((left-idx (+ min (round (- max min) 3)))
+                     (left (vlf-tune-score types left-idx)))
+                (cond ((null left)
+                       (setq vlf-batch-size (* (1+ left-idx)
+                                               vlf-tune-step)))
+                      ((< right left)
+                       (vlf-tune-best types min
+                                      (round (+ max min) 2)))
+                      (t (vlf-tune-best types (round (+ max min) 2)
+                                        max))))))))))
 
 (provide 'vlf-tune)
 

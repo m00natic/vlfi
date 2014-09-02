@@ -52,10 +52,6 @@
 (make-variable-buffer-local 'vlf-end-pos)
 (put 'vlf-end-pos 'permanent-local t)
 
-(defvar vlf-file-size 0 "Total size of presented file.")
-(make-variable-buffer-local 'vlf-file-size)
-(put 'vlf-file-size 'permanent-local t)
-
 (defconst vlf-sample-size 24
   "Minimal number of bytes that can be properly decoded.")
 
