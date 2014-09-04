@@ -202,7 +202,7 @@ Prematurely ending indexing will still show what's found so far."
          (time (float-time))
          (tune-types (let ((base '(:insert :encode)))
                        (if is-hexl
-                           (nconc '(:hexl :dehexlify) base)
+                           (append '(:hexl :dehexlify) base)
                          base)))
          (reporter (make-progress-reporter
                     (concat "Building index for " regexp "...")

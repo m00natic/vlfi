@@ -308,8 +308,10 @@ Return number of bytes moved back for proper decoding."
                        (not (zerop safe-start)))
                 (< shift 3)
                 (let ((diff (- chunk-size
-                               (vlf-tune-encode-length position
-                                                       (point-max)))))
+                               (length
+                                (encode-coding-region
+                                 position (point-max)
+                                 buffer-file-coding-system t)))))
                   (if strict
                       (not (zerop diff))
                     (or (< diff -3) (< 0 diff)))))
