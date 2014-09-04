@@ -107,7 +107,9 @@ VEC is a vector of (mean time . count) elements ordered by size."
             (existing (aref ,vec idx)))
        (aset ,vec idx (let ((count (1+ (cdr existing)))) ;recalculate mean
                         (cons (/ (+ (* (1- count) (car existing))
-                                    (/ ,size ,time))
+                                    (/ (* ,time (1+ idx) ;aproximate time
+                                          vlf-tune-step) ;for this size
+                                       ,size))
                                  count)
                               count))))))
 
@@ -165,27 +167,29 @@ SIZE is number of bytes that are saved."
 (defun vlf-tune-assess (type coef index)
   "Get measurement value according to TYPE, COEF and INDEX."
   (* coef (cond ((eq type :insert)
-                 (aref vlf-tune-insert-bps index))
+                 (car (aref vlf-tune-insert-bps index)))
                 ((eq type :raw)
-                 (aref vlf-tune-insert-raw-bps index))
+                 (car (aref vlf-tune-insert-raw-bps index)))
                 ((eq type :encode) ;encode size is less than batch size
-                 (let ((val (aref vlf-tune-encode-bps index)))
-                   (while (and (null val) (< 0 index)) ;find smaller index
-                     (setq index (1- index)
-                           val (aref vlf-tune-encode-bps index)))
-                   val))
+                 (let ((closest-idx index)
+                       (val (car (aref vlf-tune-encode-bps index))))
+                   (while (and (zerop val) (not (zerop closest-idx)))
+                     (setq closest-idx (1- closest-idx)
+                           val (car (aref vlf-tune-encode-bps
+                                          closest-idx))))
+                   (/ (* val (1+ index)) (1+ closest-idx)))) ;approximate
                 ((eq type :write)
-                 (aref vlf-tune-write-bps index))
+                 (car (aref vlf-tune-write-bps index)))
                 ((eq type :hexl)
-                 (aref vlf-tune-hexl-bps index))
+                 (car (aref vlf-tune-hexl-bps index)))
                 ((eq type :dehexlify)
-                 (aref vlf-tune-dehexlify-bps index)))))
+                 (car (aref vlf-tune-dehexlify-bps index))))))
 
 (defun vlf-tune-score (types index)
-  "Get score of TYPES which is alist of (type coef) for INDEX."
+  "Cumulative speed over TYPES which is alist of (type coef) for INDEX."
   (catch 'result
     (let ((score 0))
-      (dolist (el types score)
+      (dolist (el types (/ (* (1+ index) vlf-tune-step) score))
         (let ((sc (if (consp el)
                       (vlf-tune-assess (car el) (cadr el) index)
                     (vlf-tune-assess el 1 index))))
@@ -231,7 +235,7 @@ INDEX if given, specifies search independent of current batch size."
                                     vlf-tune-step))))))))))))
 
 (defun vlf-tune-best (types &optional min max)
-  "Adjust `vlf-batch-size' to optional value.
+  "Adjust `vlf-batch-size' to optional value with binary search.
 Score is calculated over TYPES which is alist of form (type coef).
 MIN and MAX may specify interval of indexes to search."
   (if (eq vlf-tune-enabled t)
@@ -243,11 +247,11 @@ MIN and MAX may specify interval of indexes to search."
                                  vlf-tune-step))))
         (if (< (- max min) 3)
             (vlf-tune-conservative types (round (+ min max) 2))
-          (let* ((right-idx (+ min (round (* 2 (- max min)) 3)))
+          (let* ((right-idx (round (+ min (* 3 max)) 4))
                  (right (vlf-tune-score types right-idx)))
             (if (null right)
                 (setq vlf-batch-size (* (1+ right-idx) vlf-tune-step))
-              (let* ((left-idx (+ min (round (- max min) 3)))
+              (let* ((left-idx (round (+ (* 3 min) max) 4))
                      (left (vlf-tune-score types left-idx)))
                 (cond ((null left)
                        (setq vlf-batch-size (* (1+ left-idx)
