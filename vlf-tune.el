@@ -164,24 +164,34 @@ SIZE is number of bytes that are saved."
 
 (defun vlf-tune-assess (type coef index)
   "Get measurement value according to TYPE, COEF and INDEX."
-  (* coef (cond ((eq type :insert)
-                 (car (aref vlf-tune-insert-bps index)))
-                ((eq type :raw)
-                 (car (aref vlf-tune-insert-raw-bps index)))
-                ((eq type :encode) ;encode size is less than batch size
-                 (let ((closest-idx index)
-                       (val (car (aref vlf-tune-encode-bps index))))
-                   (while (and (zerop val) (not (zerop closest-idx)))
-                     (setq closest-idx (1- closest-idx)
-                           val (car (aref vlf-tune-encode-bps
-                                          closest-idx))))
-                   (/ (* val (1+ index)) (1+ closest-idx)))) ;approximate
-                ((eq type :write)
-                 (car (aref vlf-tune-write-bps index)))
-                ((eq type :hexl)
-                 (car (aref vlf-tune-hexl-bps index)))
-                ((eq type :dehexlify)
-                 (car (aref vlf-tune-dehexlify-bps index))))))
+  (* coef (or (cond ((eq type :insert)
+                     (if vlf-tune-insert-bps
+                         (car (aref vlf-tune-insert-bps index))))
+                    ((eq type :raw)
+                     (if vlf-tune-insert-raw-bps
+                         (car (aref vlf-tune-insert-raw-bps index))))
+                    ((eq type :encode) ;encode size is less than batch size
+                     (if vlf-tune-encode-bps
+                         (let ((closest-idx index)
+                               (val (car (aref vlf-tune-encode-bps
+                                               index))))
+                           (while (and (zerop val)
+                                       (not (zerop closest-idx)))
+                             (setq closest-idx (1- closest-idx)
+                                   val (car (aref vlf-tune-encode-bps
+                                                  closest-idx))))
+                           (/ (* val (1+ index)) ;approximate
+                              (1+ closest-idx)))))
+                    ((eq type :write)
+                     (if vlf-tune-write-bps
+                         (car (aref vlf-tune-write-bps index))))
+                    ((eq type :hexl)
+                     (if vlf-tune-hexl-bps
+                         (car (aref vlf-tune-hexl-bps index))))
+                    ((eq type :dehexlify)
+                     (if vlf-tune-dehexlify-bps
+                         (car (aref vlf-tune-dehexlify-bps index)))))
+              0)))
 
 (defun vlf-tune-score (types index)
   "Cumulative speed over TYPES which is alist of (type coef) for INDEX."
