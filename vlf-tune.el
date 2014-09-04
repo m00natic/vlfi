@@ -95,21 +95,19 @@ but don't change batch size.  If t, measure and change."
 
 (defun vlf-tune-closest-index (size)
   "Get closest measurement index corresponding to SIZE."
-  (max 0 (1- (min (round size vlf-tune-step)
-                  (/ vlf-tune-max vlf-tune-step)))))
+  (let ((step (float vlf-tune-step)))
+    (max 0 (1- (min (round size step) (round vlf-tune-max step))))))
 
 (defmacro vlf-tune-add-measurement (vec size time)
   "Add at an appropriate position in VEC new SIZE TIME measurement.
 VEC is a vector of (mean time . count) elements ordered by size."
-  `(when vlf-tune-enabled
+  `(when (and vlf-tune-enabled (not (zerop ,size)))
      (or ,vec (setq ,vec (vlf-tune-initialize-measurement)))
      (let* ((idx (vlf-tune-closest-index ,size))
             (existing (aref ,vec idx)))
        (aset ,vec idx (let ((count (1+ (cdr existing)))) ;recalculate mean
                         (cons (/ (+ (* (1- count) (car existing))
-                                    (/ (* ,time (1+ idx) ;aproximate time
-                                          vlf-tune-step) ;for this size
-                                       ,size))
+                                    (/ ,size ,time))
                                  count)
                               count))))))
 
@@ -188,14 +186,15 @@ SIZE is number of bytes that are saved."
 (defun vlf-tune-score (types index)
   "Cumulative speed over TYPES which is alist of (type coef) for INDEX."
   (catch 'result
-    (let ((score 0))
-      (dolist (el types (/ (* (1+ index) vlf-tune-step) score))
-        (let ((sc (if (consp el)
-                      (vlf-tune-assess (car el) (cadr el) index)
-                    (vlf-tune-assess el 1 index))))
-          (if (zerop sc)
+    (let ((score 0)
+          (size (* (1+ index) vlf-tune-step)))
+      (dolist (el types (/ size score))
+        (let ((bps (if (consp el)
+                       (vlf-tune-assess (car el) (cadr el) index)
+                     (vlf-tune-assess el 1 index))))
+          (if (zerop bps)
               (throw 'result nil)
-            (setq score (+ score sc))))))))
+            (setq score (+ score (/ size bps)))))))))
 
 (defun vlf-tune-conservative (types &optional index)
   "Adjust `vlf-batch-size' with `vlf-tune-step' in case of better score.
@@ -245,22 +244,24 @@ MIN and MAX may specify interval of indexes to search."
               max (or max (1- (/ (min vlf-tune-max
                                       (/ vlf-file-size 2))
                                  vlf-tune-step))))
-        (if (< (- max min) 3)
-            (vlf-tune-conservative types (round (+ min max) 2))
-          (let* ((right-idx (round (+ min (* 3 max)) 4))
-                 (right (vlf-tune-score types right-idx)))
-            (if (null right)
-                (setq vlf-batch-size (* (1+ right-idx) vlf-tune-step))
-              (let* ((left-idx (round (+ (* 3 min) max) 4))
-                     (left (vlf-tune-score types left-idx)))
-                (cond ((null left)
-                       (setq vlf-batch-size (* (1+ left-idx)
-                                               vlf-tune-step)))
-                      ((< right left)
-                       (vlf-tune-best types min
-                                      (round (+ max min) 2)))
-                      (t (vlf-tune-best types (round (+ max min) 2)
-                                        max))))))))))
+        (or (< max 1)
+            (if (< (- max min) 3)
+                (vlf-tune-conservative types (round (+ min max) 2))
+              (let* ((right-idx (round (+ min (* 3 max)) 4))
+                     (right (vlf-tune-score types right-idx)))
+                (if (null right)
+                    (setq vlf-batch-size (* (1+ right-idx)
+                                            vlf-tune-step))
+                  (let* ((left-idx (round (+ (* 3 min) max) 4))
+                         (left (vlf-tune-score types left-idx)))
+                    (cond ((null left)
+                           (setq vlf-batch-size (* (1+ left-idx)
+                                                   vlf-tune-step)))
+                          ((< right left)
+                           (vlf-tune-best types min
+                                          (round (+ max min) 2)))
+                          (t (vlf-tune-best types (round (+ max min) 2)
+                                            max)))))))))))
 
 (provide 'vlf-tune)
 
