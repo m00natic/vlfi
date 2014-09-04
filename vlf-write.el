@@ -64,9 +64,11 @@ If changing size of chunk, shift remaining file content."
                   (pos (point))
                   (font-lock font-lock-mode))
               (font-lock-mode 0)
-              (if (< 0 size-change)
-                  (vlf-file-shift-back size-change region-length)
-                (vlf-file-shift-forward (- size-change) region-length))
+              (let ((time (float-time)))
+                (if (< 0 size-change)
+                    (vlf-file-shift-back size-change region-length)
+                  (vlf-file-shift-forward (- size-change) region-length))
+                (message "Save took %f seconds" (- (float-time) time)))
               (if font-lock (font-lock-mode 1))
               (vlf-move-to-chunk-2 vlf-start-pos
                                    (if (< (- vlf-end-pos vlf-start-pos)
@@ -76,7 +78,7 @@ If changing size of chunk, shift remaining file content."
               (vlf-update-buffer-name)
               (goto-char pos)))))
       (if hexl (vlf-tune-hexlify)))
-    (run-hook-with-args 'vlf-after-batch-functions 'write))
+     (run-hook-with-args 'vlf-after-batch-functions 'write))
   t)
 
 (defun vlf-file-shift-back (size-change write-size)
@@ -106,6 +108,7 @@ WRITE-SIZE is byte length of saved chunk."
 back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
   (erase-buffer)
   (vlf-verify-size t)
+  (vlf-tune-optimal '(:raw :write))
   (let ((read-end (min (+ read-pos vlf-batch-size) vlf-file-size)))
     (vlf-tune-insert-file-contents-literally read-pos read-end)
     (vlf-tune-write nil nil write-pos 0 (- read-end read-pos))
@@ -115,7 +118,8 @@ back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
   "Shift file contents SIZE-CHANGE bytes forward.
 WRITE-SIZE is byte length of saved chunk.
 Done by saving content up front and then writing previous batch."
-  (let ((read-size (max (/ vlf-batch-size 2) size-change))
+  (vlf-tune-optimal '(:raw :write))
+  (let ((read-size (max vlf-batch-size size-change))
         (read-pos vlf-end-pos)
         (write-pos vlf-start-pos)
         (reporter (make-progress-reporter "Adjusting file content..."
@@ -124,18 +128,20 @@ Done by saving content up front and then writing previous batch."
     (vlf-with-undo-disabled
      (when (vlf-shift-batches read-size read-pos write-pos
                               write-size t)
+       (vlf-tune-optimal '(:raw :write))
        (setq write-pos (+ read-pos size-change)
              read-pos (+ read-pos read-size)
              write-size read-size
-             read-size (max (/ vlf-batch-size 2) size-change))
+             read-size (max vlf-batch-size size-change))
        (progress-reporter-update reporter write-pos)
        (let ((coding-system-for-write 'no-conversion))
          (while (vlf-shift-batches read-size read-pos write-pos
                                    write-size nil)
+           (vlf-tune-optimal '(:raw :write))
            (setq write-pos (+ read-pos size-change)
                  read-pos (+ read-pos read-size)
                  write-size read-size
-                 read-size (max (/ vlf-batch-size 2) size-change))
+                 read-size (max vlf-batch-size size-change))
            (progress-reporter-update reporter write-pos)))))
     (progress-reporter-done reporter)))
 

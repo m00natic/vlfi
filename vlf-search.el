@@ -29,12 +29,21 @@
 
 (require 'vlf)
 
-(defun vlf-re-search (regexp count backward batch-step)
+(defun vlf-re-search (regexp count backward batch-step
+                             &optional reporter time)
   "Search for REGEXP COUNT number of times forward or BACKWARD.
-BATCH-STEP is amount of overlap between successive chunks."
+BATCH-STEP is amount of overlap between successive chunks.
+Use existing REPORTER and start TIME if given."
   (if (<= count 0)
       (error "Count must be positive"))
   (run-hook-with-args 'vlf-before-batch-functions 'search)
+  (or reporter (setq reporter (make-progress-reporter
+                               (concat "Searching for " regexp "...")
+                               (if backward
+                                   (- vlf-file-size vlf-end-pos)
+                                 vlf-start-pos)
+                               vlf-file-size)))
+  (or time (setq time (float-time)))
   (let* ((tramp-verbose (if (boundp 'tramp-verbose)
                             (min tramp-verbose 2)))
          (case-fold-search t)
@@ -44,13 +53,9 @@ BATCH-STEP is amount of overlap between successive chunks."
          (match-end-pos match-start-pos)
          (to-find count)
          (is-hexl (derived-mode-p 'hexl-mode))
-         (font-lock font-lock-mode)
-         (reporter (make-progress-reporter
-                    (concat "Searching for " regexp "...")
-                    (if backward
-                        (- vlf-file-size vlf-end-pos)
-                      vlf-start-pos)
-                    vlf-file-size)))
+         (tune-types (if is-hexl '(:hexl :dehexlify :insert :encode)
+                       '(:insert :encode)))
+         (font-lock font-lock-mode))
     (font-lock-mode 0)
     (vlf-with-undo-disabled
      (unwind-protect
@@ -69,7 +74,8 @@ BATCH-STEP is amount of overlap between successive chunks."
                                                 (match-end 0)))))
                        ((zerop vlf-start-pos)
                         (throw 'end-of-file nil))
-                       (t (let ((batch-move (- vlf-start-pos
+                       (t (vlf-tune-optimal tune-types)
+                          (let ((batch-move (- vlf-start-pos
                                                (- vlf-batch-size
                                                   batch-step))))
                             (vlf-move-to-batch
@@ -82,9 +88,9 @@ BATCH-STEP is amount of overlap between successive chunks."
                                                  match-start-pos))
                                          (point-max)
                                        (or (byte-to-position
-                                              (- match-start-pos
-                                                 vlf-start-pos))
-                                             (point-max))))
+                                            (- match-start-pos
+                                               vlf-start-pos))
+                                           (point-max))))
                           (progress-reporter-update
                            reporter (- vlf-file-size
                                        vlf-start-pos)))))
@@ -101,7 +107,8 @@ BATCH-STEP is amount of overlap between successive chunks."
                                               (match-end 0)))))
                      ((= vlf-end-pos vlf-file-size)
                       (throw 'end-of-file nil))
-                     (t (let ((batch-move (- vlf-end-pos batch-step)))
+                     (t (vlf-tune-optimal tune-types)
+                        (let ((batch-move (- vlf-end-pos batch-step)))
                           (vlf-move-to-batch
                            (if (or is-hexl
                                    (< match-end-pos batch-move))
@@ -111,9 +118,9 @@ BATCH-STEP is amount of overlap between successive chunks."
                                            (<= match-end-pos vlf-start-pos))
                                        (point-min)
                                      (or (byte-to-position
-                                            (- match-end-pos
-                                               vlf-start-pos))
-                                           (point-min))))
+                                          (- match-end-pos
+                                             vlf-start-pos))
+                                         (point-min))))
                         (progress-reporter-update reporter
                                                   vlf-end-pos)))))
            (progress-reporter-done reporter))
@@ -122,26 +129,26 @@ BATCH-STEP is amount of overlap between successive chunks."
        (if backward
            (vlf-goto-match match-chunk-start match-chunk-end
                            match-end-pos match-start-pos
-                           count to-find)
+                           count to-find time)
          (vlf-goto-match match-chunk-start match-chunk-end
                          match-start-pos match-end-pos
-                         count to-find))
+                         count to-find time))
        (run-hook-with-args 'vlf-after-batch-functions 'search)))))
 
 (defun vlf-goto-match (match-chunk-start match-chunk-end
-                                         match-pos-start
-                                         match-pos-end
-                                         count to-find)
+                                         match-pos-start match-pos-end
+                                         count to-find time)
   "Move to MATCH-CHUNK-START MATCH-CHUNK-END surrounding\
 MATCH-POS-START and MATCH-POS-END.
 According to COUNT and left TO-FIND, show if search has been
-successful.  Return nil if nothing found."
+successful.  Use start TIME to report how much it took.
+Return nil if nothing found."
   (if (= count to-find)
       (progn (vlf-move-to-chunk match-chunk-start match-chunk-end)
              (goto-char (or (byte-to-position (- match-pos-start
                                                  vlf-start-pos))
                             (point-max)))
-             (message "Not found")
+             (message "Not found (%f secs)" (- (float-time) time))
              nil)
     (let ((success (zerop to-find)))
       (if success
@@ -155,10 +162,11 @@ successful.  Return nil if nothing found."
                                         vlf-start-pos))
                                     match-end)))
         (overlay-put overlay 'face 'match)
-        (unless success
+        (if success
+            (message "Match found (%f secs)" (- (float-time) time))
           (goto-char match-end)
-          (message "Moved to the %d match which is last"
-                   (- count to-find)))
+          (message "Moved to the %d match which is last (%f secs)"
+                   (- count to-find) (- (float-time) time)))
         (unwind-protect (sit-for 3)
           (delete-overlay overlay))
         t))))
@@ -171,7 +179,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                                       (if regexp-history
                                           (car regexp-history)))
                          (or current-prefix-arg 1))))
-  (vlf-re-search regexp count nil (/ vlf-batch-size 8)))
+  (vlf-re-search regexp count nil (min 1024 (/ vlf-batch-size 8))))
 
 (defun vlf-re-search-backward (regexp count)
   "Search backward for REGEXP prefix COUNT number of times.
@@ -181,7 +189,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                                       (if regexp-history
                                           (car regexp-history)))
                          (or current-prefix-arg 1))))
-  (vlf-re-search regexp count t (/ vlf-batch-size 8)))
+  (vlf-re-search regexp count t (min 1024 (/ vlf-batch-size 8))))
 
 (defun vlf-goto-line (n)
   "Go to line N.  If N is negative, count from the end of file."
@@ -196,8 +204,10 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
         (pos (point))
         (is-hexl (derived-mode-p 'hexl-mode))
         (font-lock font-lock-mode)
+        (time (float-time))
         (success nil))
     (font-lock-mode 0)
+    (vlf-tune-optimal '(:raw))
     (unwind-protect
         (if (< 0 n)
             (let ((start 0)
@@ -218,6 +228,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                      (while (re-search-forward "[\n\C-m]" nil t)
                        (setq n (1- n)))
                      (vlf-verify-size)
+                     (vlf-tune-optimal '(:raw))
                      (setq start end
                            end (min vlf-file-size
                                     (+ start vlf-batch-size)))
@@ -225,7 +236,8 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                (when (< n (- vlf-file-size end))
                  (vlf-move-to-chunk-2 start end)
                  (goto-char (point-min))
-                 (setq success (vlf-re-search "[\n\C-m]" n nil 0)))))
+                 (setq success (vlf-re-search "[\n\C-m]" n nil 0
+                                              reporter time)))))
           (let ((start (max 0 (- vlf-file-size vlf-batch-size)))
                 (end vlf-file-size)
                 (reporter (make-progress-reporter
@@ -242,6 +254,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                    (goto-char (point-max))
                    (while (re-search-backward "[\n\C-m]" nil t)
                      (setq n (1- n)))
+                   (vlf-tune-optimal '(:raw))
                    (setq end start
                          start (max 0 (- end vlf-batch-size)))
                    (progress-reporter-update reporter
@@ -249,7 +262,8 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
              (when (< n end)
                (vlf-move-to-chunk-2 start end)
                (goto-char (point-max))
-               (setq success (vlf-re-search "[\n\C-m]" n t 0))))))
+               (setq success (vlf-re-search "[\n\C-m]" n t 0
+                                            reporter time))))))
       (if font-lock (font-lock-mode 1))
       (unless success
         (vlf-with-undo-disabled
