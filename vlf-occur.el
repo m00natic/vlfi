@@ -200,10 +200,8 @@ Prematurely ending indexing will still show what's found so far."
          (is-hexl (derived-mode-p 'hexl-mode))
          (end-of-file nil)
          (time (float-time))
-         (tune-types (let ((base '(:insert :encode)))
-                       (if is-hexl
-                           (append '(:hexl :dehexlify) base)
-                         base)))
+         (tune-types (if is-hexl '(:hexl :dehexlify :insert :encode)
+                       '(:insert :encode)))
          (reporter (make-progress-reporter
                     (concat "Building index for " regexp "...")
                     vlf-start-pos vlf-file-size)))
@@ -259,7 +257,7 @@ Prematurely ending indexing will still show what's found so far."
                                          total-matches))))))))
               (setq end-of-file (= vlf-end-pos vlf-file-size))
               (unless end-of-file
-                (vlf-tune-best tune-types)
+                (vlf-tune-optimal tune-types)
                 (let ((batch-move (- vlf-end-pos batch-step)))
                   (vlf-move-to-batch (if (or is-hexl
                                              (< match-end-pos
@@ -302,8 +300,8 @@ in file: %s" total-matches line regexp file)
         (message "Occur finished for \"%s\" (%f secs)"
                  regexp (- (float-time) time))))))
 
-
-;; save, load vlf-occur data
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; save, load vlf-occur data
 
 (defun vlf-occur-save (file)
   "Serialize `vlf-occur' results to FILE which can later be reloaded."
