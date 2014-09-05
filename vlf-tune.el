@@ -180,17 +180,14 @@ SIZE is number of bytes that are saved."
         (max (length vec)))
     (while (and (zerop val) (or (<= 0 left-idx)
                                 (< right-idx max)))
-      (when (<= 0 left-idx)
-        (setq val (car (aref vec left-idx)))
-        (if (and (not (zerop val)) (/= val -1))
-            (setq val (/ (* val (1+ index))
-                         (1+ left-idx)))))
+      (if (<= 0 left-idx)
+          (let ((left (car (aref vec left-idx))))
+            (if (and (not (zerop left)) (/= left -1))
+                (setq val left))))
       (if (< right-idx max)
-          (let ((right (car (aref vec left-idx))))
+          (let ((right (car (aref vec right-idx))))
             (if (and (not (zerop right)) (/= right -1))
-                (setq right (/ (* right (1+ index))
-                               (1+ right-idx))
-                      val (if (zerop val)
+                (setq val (if (zerop val)
                               right
                             (/ (+ val right) 2))))))
       (setq left-idx (1- left-idx)
@@ -244,7 +241,7 @@ SIZE is number of bytes that are saved."
   "Adjust `vlf-batch-size' to best nearby value over TYPES.
 INDEX if given, specifies search independent of current batch size."
   (if (eq vlf-tune-enabled t)
-      (let* ((half-max (/ vlf-file-size 2))
+      (let* ((half-max (/ (1+ vlf-file-size) 2))
              (idx (or index (vlf-tune-closest-index vlf-batch-size)))
              (curr (if (< half-max (* idx vlf-tune-step)) t
                      (vlf-tune-score types idx))))
@@ -321,7 +318,8 @@ non list values in which case coeficient is assumed 1.
 Types can be :insert, :raw, :encode, :write, :hexl or :dehexlify.
 If LINEAR is non nil, use brute-force."
   (if (eq vlf-tune-enabled t)
-      (let ((max-idx (1- (/ (min vlf-tune-max (/ vlf-file-size 2))
+      (let ((max-idx (1- (/ (min vlf-tune-max
+                                 (/ (1+ vlf-file-size) 2))
                             vlf-tune-step))))
         (cond (linear (vlf-tune-linear types max-idx))
               ((file-remote-p buffer-file-name)
