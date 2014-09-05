@@ -100,7 +100,7 @@ but don't change batch size.  If t, measure and change."
 
 (defun vlf-tune-initialize-measurement ()
   "Initialize measurement vector."
-  (make-vector (1- (/ vlf-tune-max vlf-tune-step)) '(0 . 0)))
+  (make-vector (/ vlf-tune-max vlf-tune-step) '(0 . 0)))
 
 (defmacro vlf-tune-add-measurement (vec size time)
   "Add at an appropriate position in VEC new SIZE TIME measurement.
@@ -108,9 +108,12 @@ VEC is a vector of (mean time . count) elements ordered by size."
   `(when (and vlf-tune-enabled (not (zerop ,size)))
      (or ,vec (setq ,vec (vlf-tune-initialize-measurement)))
      (let* ((idx (vlf-tune-closest-index ,size))
-            (existing (aref ,vec idx)))
+            (existing (aref ,vec idx))
+            (existing-val (car existing)))
        (aset ,vec idx (let ((count (1+ (cdr existing)))) ;recalculate mean
-                        (cons (/ (+ (* (1- count) (car existing))
+                        (cons (/ (+ (* (1- count)
+                                       (if (= existing-val -1) 0
+                                         existing-val))
                                     (/ ,size ,time))
                                  count)
                               count))))))
@@ -169,29 +172,51 @@ SIZE is number of bytes that are saved."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; tuning
 
+(defun vlf-tune-approximate-nearby (vec index)
+  "VEC has value for INDEX, approximate to closest available."
+  (let ((val 0)
+        (left-idx (1- index))
+        (right-idx (1+ index))
+        (max (length vec)))
+    (while (and (zerop val) (or (<= 0 left-idx)
+                                (< right-idx max)))
+      (when (<= 0 left-idx)
+        (setq val (car (aref vec left-idx)))
+        (if (and (not (zerop val)) (/= val -1))
+            (setq val (/ (* val (1+ index))
+                         (1+ left-idx)))))
+      (if (< right-idx max)
+          (let ((right (car (aref vec left-idx))))
+            (if (and (not (zerop right)) (/= right -1))
+                (setq right (/ (* right (1+ index))
+                               (1+ right-idx))
+                      val (if (zerop val)
+                              right
+                            (/ (+ val right) 2)))))))
+    val))
+
+(defmacro vlf-tune-approximate (vec index)
+  "Unless VEC has value for INDEX, approximate to closest available."
+  `(if ,vec
+       (let ((val (car (aref ,vec ,index))))
+         (cond ((zerop val)
+                (aset ,vec ,index '(-1 . 0)) ;mark element as tried once
+                0)
+               ((= val -1) ;index has been tried before, yet still no value
+                (vlf-tune-approximate-nearby ,vec ,index))
+               (t val)))))
+
 (defun vlf-tune-assess (type coef index)
   "Get measurement value according to TYPE, COEF and INDEX."
   (* coef (or (cond ((eq type :insert)
-                     (if vlf-tune-insert-bps
-                         (car (aref vlf-tune-insert-bps index))))
+                     (vlf-tune-approximate vlf-tune-insert-bps index))
                     ((eq type :raw)
-                     (if vlf-tune-insert-raw-bps
-                         (car (aref vlf-tune-insert-raw-bps index))))
-                    ((eq type :encode) ;encode size is less than batch size
-                     (if vlf-tune-encode-bps
-                         (let ((closest-idx index)
-                               (val (car (aref vlf-tune-encode-bps
-                                               index))))
-                           (while (and (zerop val)
-                                       (not (zerop closest-idx)))
-                             (setq closest-idx (1- closest-idx)
-                                   val (car (aref vlf-tune-encode-bps
-                                                  closest-idx))))
-                           (/ (* val (1+ index)) ;approximate
-                              (1+ closest-idx)))))
+                     (vlf-tune-approximate vlf-tune-insert-raw-bps
+                                           index))
+                    ((eq type :encode)
+                     (vlf-tune-approximate vlf-tune-encode-bps index))
                     ((eq type :write)
-                     (if vlf-tune-write-bps
-                         (car (aref vlf-tune-write-bps index))))
+                     (vlf-tune-approximate vlf-tune-write-bps index))
                     ((eq type :hexl)
                      (if vlf-tune-hexl-bps
                          (car (aref vlf-tune-hexl-bps index))))
@@ -253,18 +278,21 @@ INDEX if given, specifies search independent of current batch size."
   "Adjust `vlf-batch-size' to optimal value using binary search, \
 optimizing over TYPES.
 MIN and MAX specify interval of indexes to search."
-  (let* ((left-idx (round (+ (* 3 min) max) 4))
-         (left (vlf-tune-score types left-idx)))
-    (if left
-        (let* ((right-idx (round (+ min (* 3 max)) 4))
-               (right (vlf-tune-score types right-idx)))
-          (cond ((null right)
-                 (setq vlf-batch-size (* (1+ right-idx)
-                                         vlf-tune-step)))
-                ((< left right)
-                 (vlf-tune-binary types (/ (+ 1 max min) 2) max))
-                (t (vlf-tune-binary types min (/ (+ max min) 2)))))
-      (setq vlf-batch-size (* (1+ left-idx) vlf-tune-step)))))
+  (let ((sum (+ min max)))
+    (if (< (- max min) 3)
+        (vlf-tune-conservative types (/ sum 2))
+      (let* ((left-idx (round (+ sum (* 2 min)) 4))
+             (left (vlf-tune-score types left-idx)))
+        (if left
+            (let* ((right-idx (round (+ sum (* 2 max)) 4))
+                   (right (vlf-tune-score types right-idx)))
+              (cond ((null right)
+                     (setq vlf-batch-size (* (1+ right-idx)
+                                             vlf-tune-step)))
+                    ((< left right)
+                     (vlf-tune-binary types (/ (1+ sum) 2) max))
+                    (t (vlf-tune-binary types min (/ sum 2)))))
+          (setq vlf-batch-size (* (1+ left-idx) vlf-tune-step)))))))
 
 (defun vlf-tune-linear (types max-idx)
   "Adjust `vlf-batch-size' to optimal value using linear search, \
