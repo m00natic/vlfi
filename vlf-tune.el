@@ -153,8 +153,8 @@ VEC is a vector of (mean time . count) elements ordered by size."
   "Save buffer and save time it takes.
 START, END, APPEND, VISIT have same meaning as in `write-region'.
 SIZE is number of bytes that are saved."
-  (let ((time (car (write-region start end buffer-file-name
-                                 append visit))))
+  (let ((time (car (vlf-time (write-region start end buffer-file-name
+                                           append visit)))))
     (vlf-tune-add-measurement vlf-tune-write-bps size time)))
 
 (defun vlf-tune-hexlify ()
@@ -192,7 +192,9 @@ SIZE is number of bytes that are saved."
                                (1+ right-idx))
                       val (if (zerop val)
                               right
-                            (/ (+ val right) 2)))))))
+                            (/ (+ val right) 2))))))
+      (setq left-idx (1- left-idx)
+            right-idx (1+ right-idx)))
     val))
 
 (defmacro vlf-tune-approximate (vec index)
