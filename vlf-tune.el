@@ -100,7 +100,9 @@ but don't change batch size.  If t, measure and change."
 
 (defun vlf-tune-initialize-measurement ()
   "Initialize measurement vector."
-  (make-vector (/ vlf-tune-max vlf-tune-step) '(0 . 0)))
+  (make-local-variable 'vlf-tune-max)
+  (make-local-variable 'vlf-tune-step)
+  (make-vector (/ vlf-tune-max vlf-tune-step) nil))
 
 (defmacro vlf-tune-add-measurement (vec size time)
   "Add at an appropriate position in VEC new SIZE TIME measurement.
@@ -108,15 +110,14 @@ VEC is a vector of (mean time . count) elements ordered by size."
   `(when (and vlf-tune-enabled (not (zerop ,size)))
      (or ,vec (setq ,vec (vlf-tune-initialize-measurement)))
      (let* ((idx (vlf-tune-closest-index ,size))
-            (existing (aref ,vec idx))
-            (existing-val (car existing)))
-       (aset ,vec idx (let ((count (1+ (cdr existing)))) ;recalculate mean
-                        (cons (/ (+ (* (1- count)
-                                       (if (= existing-val -1) 0
-                                         existing-val))
-                                    (/ ,size ,time))
-                                 count)
-                              count))))))
+            (existing (aref ,vec idx)))
+       (aset ,vec idx (if (consp existing)
+                          (let ((count (1+ (cdr existing)))) ;recalculate mean
+                            (cons (/ (+ (* (1- count) (car existing))
+                                        (/ ,size ,time))
+                                     count)
+                                  count))
+                        (cons (/ ,size ,time) 1))))))
 
 (defmacro vlf-time (&rest body)
   "Get timing consed with result of BODY execution."
@@ -177,62 +178,75 @@ SIZE is number of bytes that are saved."
   (let ((val 0)
         (left-idx (1- index))
         (right-idx (1+ index))
-        (max (length vec)))
-    (while (and (zerop val) (or (<= 0 left-idx)
-                                (< right-idx max)))
-      (if (<= 0 left-idx)
-          (let ((left (car (aref vec left-idx))))
-            (if (and (not (zerop left)) (/= left -1))
-                (setq val left))))
-      (if (< right-idx max)
-          (let ((right (car (aref vec right-idx))))
-            (if (and (not (zerop right)) (/= right -1))
-                (setq val (if (zerop val)
-                              right
-                            (/ (+ val right) 2))))))
+        (min-idx (max 0 (- index 5)))
+        (max-idx (min (+ index 6)
+                      (1- (/ (min vlf-tune-max
+                                  (/ (1+ vlf-file-size) 2))
+                             vlf-tune-step)))))
+    (while (and (zerop val) (or (<= min-idx left-idx)
+                                (< right-idx max-idx)))
+      (if (<= min-idx left-idx)
+          (let ((left (aref vec left-idx)))
+            (cond ((consp left) (setq val (car left)))
+                  ((numberp left) (setq val left)))))
+      (if (< right-idx max-idx)
+          (let ((right (aref vec right-idx)))
+            (if (consp right)
+                (setq right (car right)))
+            (and (numberp right) (not (zerop right))
+                 (setq val (if (zerop val)
+                               right
+                             (/ (+ val right) 2))))))
       (setq left-idx (1- left-idx)
             right-idx (1+ right-idx)))
     val))
 
-(defmacro vlf-tune-approximate (vec index)
-  "Unless VEC has value for INDEX, approximate to closest available."
+(defmacro vlf-tune-get-value (vec index &optional dont-approximate)
+  "Get value from VEC for INDEX.
+If missing, approximate from nearby measurement,
+unless DONT-APPROXIMATE is t."
   `(if ,vec
-       (let ((val (car (aref ,vec ,index))))
-         (cond ((zerop val)
-                (aset ,vec ,index '(-1 . 0)) ;mark element as tried once
-                0)
-               ((= val -1) ;index has been tried before, yet still no value
-                (vlf-tune-approximate-nearby ,vec ,index))
+       (let ((val (aref ,vec ,index)))
+         (cond ((consp val) (car val))
+               ((null val)
+                ,(if dont-approximate
+                     `(aset ,vec ,index 0)
+                   `(vlf-tune-approximate-nearby ,vec ,index)))
+               ((zerop val) ;index has been tried before, yet still no value
+                (aset ,vec ,index
+                      (vlf-tune-approximate-nearby ,vec ,index)))
                (t val)))))
 
-(defun vlf-tune-assess (type coef index)
-  "Get measurement value according to TYPE, COEF and INDEX."
-  (* coef (or (cond ((eq type :insert)
-                     (vlf-tune-approximate vlf-tune-insert-bps index))
-                    ((eq type :raw)
-                     (vlf-tune-approximate vlf-tune-insert-raw-bps
-                                           index))
-                    ((eq type :encode)
-                     (vlf-tune-approximate vlf-tune-encode-bps index))
-                    ((eq type :write)
-                     (vlf-tune-approximate vlf-tune-write-bps index))
-                    ((eq type :hexl)
-                     (if vlf-tune-hexl-bps
-                         (car (aref vlf-tune-hexl-bps index))))
-                    ((eq type :dehexlify)
-                     (if vlf-tune-dehexlify-bps
-                         (car (aref vlf-tune-dehexlify-bps index)))))
+(defmacro vlf-tune-get-vector (key)
+  "Get vlf-tune vector corresponding to KEY."
+  `(cond ((eq ,key :insert) vlf-tune-insert-bps)
+         ((eq ,key :raw) vlf-tune-insert-raw-bps)
+         ((eq ,key :encode) vlf-tune-encode-bps)
+         ((eq ,key :write) vlf-tune-write-bps)
+         ((eq ,key :hexl) vlf-tune-hexl-bps)
+         ((eq ,key :dehexlify) vlf-tune-dehexlify-bps)))
+
+(defun vlf-tune-assess (type coef index &optional approximate)
+  "Get measurement value according to TYPE, COEF and INDEX.
+If APPROXIMATE is t, do approximation for missing values."
+  (* coef (or (if approximate
+                  (vlf-tune-get-value (vlf-tune-get-vector type)
+                                      index)
+                (vlf-tune-get-value (vlf-tune-get-vector type)
+                                    index t))
               0)))
 
-(defun vlf-tune-score (types index)
-  "Calculate cumulative speed over TYPES for INDEX."
+(defun vlf-tune-score (types index &optional approximate)
+  "Calculate cumulative speed over TYPES for INDEX.
+If APPROXIMATE is t, do approximation for missing values."
   (catch 'result
     (let ((time 0)
           (size (* (1+ index) vlf-tune-step)))
       (dolist (el types (/ size time))
         (let ((bps (if (consp el)
-                       (vlf-tune-assess (car el) (cadr el) index)
-                     (vlf-tune-assess el 1 index))))
+                       (vlf-tune-assess (car el) (cadr el) index
+                                        approximate)
+                     (vlf-tune-assess el 1 index approximate))))
           (if (zerop bps)
               (throw 'result nil)
             (setq time (+ time (/ size bps)))))))))
@@ -300,7 +314,7 @@ optimizing over TYPES up to MAX-IDX."
         (best-bps 0)
         (idx 0)
         (none-missing t))
-    (while (and none-missing (<= idx max-idx))
+    (while (and none-missing (< idx max-idx))
       (let ((bps (vlf-tune-score types idx)))
         (cond ((null bps)
                (setq vlf-batch-size (* (1+ idx) vlf-tune-step)
