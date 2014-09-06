@@ -78,7 +78,7 @@ If changing size of chunk, shift remaining file content."
               (vlf-update-buffer-name)
               (goto-char pos)))))
       (if hexl (vlf-tune-hexlify)))
-     (run-hook-with-args 'vlf-after-batch-functions 'write))
+    (run-hook-with-args 'vlf-after-batch-functions 'write))
   t)
 
 (defun vlf-file-shift-back (size-change write-size)
@@ -108,7 +108,7 @@ WRITE-SIZE is byte length of saved chunk."
 back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
   (erase-buffer)
   (vlf-verify-size t)
-  (vlf-tune-optimal '(:raw :write))
+  (vlf-tune-batch '(:raw :write))
   (let ((read-end (min (+ read-pos vlf-batch-size) vlf-file-size)))
     (vlf-tune-insert-file-contents-literally read-pos read-end)
     (vlf-tune-write nil nil write-pos 0 (- read-end read-pos))
@@ -118,7 +118,7 @@ back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
   "Shift file contents SIZE-CHANGE bytes forward.
 WRITE-SIZE is byte length of saved chunk.
 Done by saving content up front and then writing previous batch."
-  (vlf-tune-optimal '(:raw :write))
+  (vlf-tune-batch '(:raw :write))
   (let ((read-size (max vlf-batch-size size-change))
         (read-pos vlf-end-pos)
         (write-pos vlf-start-pos)
@@ -128,7 +128,7 @@ Done by saving content up front and then writing previous batch."
     (vlf-with-undo-disabled
      (when (vlf-shift-batches read-size read-pos write-pos
                               write-size t)
-       (vlf-tune-optimal '(:raw :write))
+       (vlf-tune-batch '(:raw :write))
        (setq write-pos (+ read-pos size-change)
              read-pos (+ read-pos read-size)
              write-size read-size
@@ -137,7 +137,7 @@ Done by saving content up front and then writing previous batch."
        (let ((coding-system-for-write 'no-conversion))
          (while (vlf-shift-batches read-size read-pos write-pos
                                    write-size nil)
-           (vlf-tune-optimal '(:raw :write))
+           (vlf-tune-batch '(:raw :write))
            (setq write-pos (+ read-pos size-change)
                  read-pos (+ read-pos read-size)
                  write-size read-size

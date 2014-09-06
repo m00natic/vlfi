@@ -257,7 +257,7 @@ Prematurely ending indexing will still show what's found so far."
                                          total-matches))))))))
               (setq end-of-file (= vlf-end-pos vlf-file-size))
               (unless end-of-file
-                (vlf-tune-optimal tune-types)
+                (vlf-tune-batch tune-types)
                 (let ((batch-move (- vlf-end-pos batch-step)))
                   (vlf-move-to-batch (if (or is-hexl
                                              (< match-end-pos

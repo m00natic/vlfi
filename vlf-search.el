@@ -74,7 +74,7 @@ Use existing REPORTER and start TIME if given."
                                                 (match-end 0)))))
                        ((zerop vlf-start-pos)
                         (throw 'end-of-file nil))
-                       (t (vlf-tune-optimal tune-types)
+                       (t (vlf-tune-batch tune-types)
                           (let ((batch-move (- vlf-start-pos
                                                (- vlf-batch-size
                                                   batch-step))))
@@ -107,7 +107,7 @@ Use existing REPORTER and start TIME if given."
                                               (match-end 0)))))
                      ((= vlf-end-pos vlf-file-size)
                       (throw 'end-of-file nil))
-                     (t (vlf-tune-optimal tune-types)
+                     (t (vlf-tune-batch tune-types)
                         (let ((batch-move (- vlf-end-pos batch-step)))
                           (vlf-move-to-batch
                            (if (or is-hexl
@@ -207,7 +207,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
         (time (float-time))
         (success nil))
     (font-lock-mode 0)
-    (vlf-tune-optimal '(:raw))
+    (vlf-tune-batch '(:raw))
     (unwind-protect
         (if (< 0 n)
             (let ((start 0)
@@ -228,7 +228,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                      (while (re-search-forward "[\n\C-m]" nil t)
                        (setq n (1- n)))
                      (vlf-verify-size)
-                     (vlf-tune-optimal '(:raw))
+                     (vlf-tune-batch '(:raw))
                      (setq start end
                            end (min vlf-file-size
                                     (+ start vlf-batch-size)))
@@ -254,7 +254,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                    (goto-char (point-max))
                    (while (re-search-backward "[\n\C-m]" nil t)
                      (setq n (1- n)))
-                   (vlf-tune-optimal '(:raw))
+                   (vlf-tune-batch '(:raw))
                    (setq end start
                          start (max 0 (- end vlf-batch-size)))
                    (progress-reporter-update reporter
