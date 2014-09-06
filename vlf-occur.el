@@ -144,41 +144,69 @@ EVENT may hold details of the invocation."
           (vlf-move-to-chunk chunk-start chunk-end)
           (goto-char match-pos)))))
 
+(defun vlf-occur-other-buffer (regexp)
+  "Make whole file occur style index for REGEXP branching to new buffer.
+Prematurely ending indexing will still show what's found so far."
+  (let ((vlf-buffer (current-buffer))
+        (file buffer-file-name)
+        (batch-size vlf-batch-size)
+        (is-hexl (derived-mode-p 'hexl-mode))
+        (insert-bps vlf-tune-insert-bps)
+        (encode-bps vlf-tune-encode-bps)
+        (hexl-bps vlf-tune-hexl-bps)
+        (dehexlify-bps vlf-tune-dehexlify-bps))
+    (with-temp-buffer
+      (setq buffer-file-name file
+            buffer-file-truename file
+            buffer-undo-list t)
+      (set-buffer-modified-p nil)
+      (set (make-local-variable 'vlf-batch-size) batch-size)
+      (setq vlf-tune-insert-bps insert-bps
+            vlf-tune-encode-bps encode-bps)
+      (if is-hexl
+          (progn (setq vlf-tune-hexl-bps hexl-bps
+                       vlf-tune-dehexlify-bps dehexlify-bps)
+                 (vlf-tune-batch '(:hexl :dehexlify :insert :encode)))
+        (vlf-tune-batch '(:insert :encode)))
+      (vlf-mode 1)
+      (if is-hexl (vlf-tune-hexlify))
+      (goto-char (point-min))
+      (vlf-with-undo-disabled
+       (vlf-build-occur regexp vlf-buffer))
+      (setq insert-bps vlf-tune-insert-bps
+            encode-bps vlf-tune-encode-bps)
+      (if is-hexl
+          (setq insert-bps vlf-tune-insert-bps
+                encode-bps vlf-tune-encode-bps)))
+    (setq vlf-tune-insert-bps insert-bps
+          vlf-tune-encode-bps encode-bps)
+    (if is-hexl
+        (setq vlf-tune-insert-bps insert-bps
+              vlf-tune-encode-bps encode-bps))))
+
 (defun vlf-occur (regexp)
   "Make whole file occur style index for REGEXP.
 Prematurely ending indexing will still show what's found so far."
   (interactive (list (read-regexp "List lines matching regexp"
                                   (if regexp-history
                                       (car regexp-history)))))
-  (if (buffer-modified-p) ;use temporary buffer not to interfere with modifications
-      (let ((vlf-buffer (current-buffer))
-            (file buffer-file-name)
-            (batch-size vlf-batch-size)
-            (is-hexl (derived-mode-p 'hexl-mode)))
-        (with-temp-buffer
-          (setq buffer-file-name file
-                buffer-file-truename file
-                buffer-undo-list t)
-          (set-buffer-modified-p nil)
-          (set (make-local-variable 'vlf-batch-size) batch-size)
-          (vlf-mode 1)
-          (if is-hexl (vlf-tune-hexlify))
-          (run-hook-with-args 'vlf-before-batch-functions 'occur)
-          (goto-char (point-min))
-          (vlf-with-undo-disabled
-           (vlf-build-occur regexp vlf-buffer))
-          (run-hook-with-args 'vlf-after-batch-functions 'occur)))
-    (run-hook-with-args 'vlf-before-batch-functions 'occur)
+  (run-hook-with-args 'vlf-before-batch-functions 'occur)
+  (if (or (buffer-modified-p)
+          (< vlf-batch-size vlf-start-pos))
+      (vlf-occur-other-buffer regexp)
     (let ((start-pos vlf-start-pos)
           (end-pos vlf-end-pos)
           (pos (point)))
+      (if (derived-mode-p 'hexl-mode)
+          (vlf-tune-batch '(:hexl :dehexlify :insert :encode))
+        (vlf-tune-batch '(:insert :encode)))
       (vlf-with-undo-disabled
-       (vlf-beginning-of-file)
+       (vlf-move-to-batch 0)
        (goto-char (point-min))
        (unwind-protect (vlf-build-occur regexp (current-buffer))
          (vlf-move-to-chunk start-pos end-pos)
-         (goto-char pos))))
-    (run-hook-with-args 'vlf-after-batch-functions 'occur)))
+         (goto-char pos)))))
+  (run-hook-with-args 'vlf-after-batch-functions 'occur))
 
 (defun vlf-build-occur (regexp vlf-buffer)
   "Build occur style index for REGEXP over VLF-BUFFER."

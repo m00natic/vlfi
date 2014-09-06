@@ -234,7 +234,11 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                                     (+ start vlf-batch-size)))
                      (progress-reporter-update reporter start)))
                (when (< n (- vlf-file-size end))
-                 (vlf-move-to-chunk-2 start end)
+                 (if is-hexl
+                     (vlf-tune-batch '(:hexl :dehexlify
+                                             :insert :encode))
+                   (vlf-tune-batch '(:insert :encode)))
+                 (vlf-move-to-chunk-2 start (+ start vlf-batch-size))
                  (goto-char (point-min))
                  (setq success (vlf-re-search "[\n\C-m]" n nil 0
                                               reporter time)))))
@@ -260,7 +264,11 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                    (progress-reporter-update reporter
                                              (- vlf-file-size end))))
              (when (< n end)
-               (vlf-move-to-chunk-2 start end)
+               (if is-hexl
+                   (vlf-tune-batch '(:hexl :dehexlify
+                                           :insert :encode))
+                 (vlf-tune-batch '(:insert :encode)))
+               (vlf-move-to-chunk-2 (- end vlf-batch-size) end)
                (goto-char (point-max))
                (setq success (vlf-re-search "[\n\C-m]" n t 0
                                             reporter time))))))
