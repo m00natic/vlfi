@@ -345,6 +345,21 @@ Suitable for multiple batch operations."
                    (vlf-tune-conservative types (/ max-idx 2))
                  (vlf-tune-binary types 0 max-idx)))))))
 
+(defun vlf-tune-get-optimal (types)
+  "Get best batch size according to existing measurements over TYPES."
+  (let ((max-idx (1- (/ (min vlf-tune-max (/ (1+ vlf-file-size) 2))
+                        vlf-tune-step)))
+        (best-idx 0)
+        (best-bps 0)
+        (idx 0))
+    (while (< idx max-idx)
+      (let ((bps (vlf-tune-score types idx t)))
+        (and bps (< best-bps bps)
+             (setq best-idx idx
+                   best-bps bps)))
+      (setq idx (1+ idx)))
+    (* (1+ best-idx) vlf-tune-step)))
+
 (provide 'vlf-tune)
 
 ;;; vlf-tune.el ends here

@@ -259,7 +259,12 @@ with the prefix argument DECREASE it is halved."
 
 (defun vlf-set-batch-size (size)
   "Set batch to SIZE bytes and update chunk."
-  (interactive (list (read-number "Size in bytes: " vlf-batch-size)))
+  (interactive
+   (list (read-number "Size in bytes: "
+                      (vlf-tune-get-optimal
+                       (if (derived-mode-p 'hexl-mode)
+                           '(:hexl :dehexlify :insert :encode)
+                         '(:insert :encode))))))
   (setq vlf-batch-size size)
   (vlf-move-to-batch vlf-start-pos))
 
