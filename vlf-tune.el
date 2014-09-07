@@ -23,10 +23,17 @@
 
 ;;; Commentary:
 ;; This package provides wrappers for basic chunk operations that add
-;; time statistics and automatic tuning of `vlf-batch-size' for
-;; optimal performance.
+;; profiling and automatic tuning of `vlf-batch-size'.
 
 ;;; Code:
+
+(defgroup vlf nil "View Large Files in Emacs."
+  :prefix "vlf-" :group 'files)
+
+(defcustom vlf-batch-size 1000000
+  "Defines how large each batch of file data initially is (in bytes)."
+  :group 'vlf :type 'integer)
+(put 'vlf-batch-size 'permanent-local t)
 
 (defcustom vlf-tune-enabled t
   "Whether to allow automatic change of batch size.
@@ -56,7 +63,7 @@ but don't change batch size.  If t, measure and change."
   "Maximum batch size in bytes when auto tuning."
   :group 'vlf :type 'integer)
 
-(defcustom vlf-tune-step (round vlf-tune-max 1000)
+(defcustom vlf-tune-step (/ vlf-tune-max 1000)
   "Step used for tuning in bytes."
   :group 'vlf :type 'integer)
 
@@ -100,7 +107,7 @@ but don't change batch size.  If t, measure and change."
     (max 0 (1- (min (round size step) (round vlf-tune-max step))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; bookkeeping
+;;; profiling
 
 (defun vlf-tune-initialize-measurement ()
   "Initialize measurement vector."
@@ -125,9 +132,12 @@ VEC is a vector of (mean time . count) elements ordered by size."
 
 (defmacro vlf-time (&rest body)
   "Get timing consed with result of BODY execution."
-  `(let ((time (float-time))
-         (result (progn ,@body)))
-     (cons (- (float-time) time) result)))
+  `(if vlf-tune-enabled
+       (let* ((time (float-time))
+              (result (progn ,@body)))
+         (cons (- (float-time) time) result))
+     (let ((result (progn ,@body)))
+       (cons nil result))))
 
 (defun vlf-tune-insert-file-contents (start end)
   "Extract decoded file bytes START to END and save time it takes."
@@ -364,40 +374,48 @@ Suitable for multiple batch operations."
 Best considered where primitive operations total is closest to
 `vlf-tune-load-time'.  If MIN-IDX and MAX-IDX are given,
 confine search to this region."
-  (or max-idx
-      (setq max-idx (min max-idx (1- (/ (min vlf-tune-max
-                                             (/ (1+ vlf-file-size) 2))
-                                        vlf-tune-step)))))
-  (let* ((idx (max 0 (or min-idx 0)))
-         (best-idx idx)
-         (best-time-diff vlf-tune-load-time)
-         (all-less t)
-         (all-more t))
-    (while (and (not (zerop best-time-diff)) (< idx max-idx))
-      (let ((time-diff (vlf-tune-score types idx t
-                                       (+ vlf-tune-load-time
-                                          best-time-diff))))
-        (when time-diff
-          (setq time-diff (if (< vlf-tune-load-time time-diff)
-                              (progn (setq all-less nil)
-                                     (- time-diff vlf-tune-load-time))
-                            (setq all-more nil)
-                            (- vlf-tune-load-time time-diff)))
-          (if (< time-diff best-time-diff)
-              (setq best-idx idx
-                    best-time-diff time-diff))))
-      (setq idx (1+ idx)))
-    (* vlf-tune-step (1+ (cond ((eq all-less all-more) best-idx)
-                               (all-less max-idx)
-                               (t min-idx))))))
+  (if vlf-tune-enabled
+      (progn
+        (or max-idx
+            (setq max-idx (min max-idx
+                               (1- (/ (min vlf-tune-max
+                                           (/ (1+ vlf-file-size) 2))
+                                      vlf-tune-step)))))
+        (let* ((idx (max 0 (or min-idx 0)))
+               (best-idx idx)
+               (best-time-diff vlf-tune-load-time)
+               (all-less t)
+               (all-more t))
+          (while (and (not (zerop best-time-diff)) (< idx max-idx))
+            (let ((time-diff (vlf-tune-score types idx t
+                                             (+ vlf-tune-load-time
+                                                best-time-diff))))
+              (when time-diff
+                (setq time-diff (if (< vlf-tune-load-time time-diff)
+                                    (progn (setq all-less nil)
+                                           (- time-diff
+                                              vlf-tune-load-time))
+                                  (setq all-more nil)
+                                  (- vlf-tune-load-time time-diff)))
+                (if (< time-diff best-time-diff)
+                    (setq best-idx idx
+                          best-time-diff time-diff))))
+            (setq idx (1+ idx)))
+          (* vlf-tune-step (1+ (cond ((or (zerop best-time-diff)
+                                          (eq all-less all-more))
+                                      best-idx)
+                                     (all-less max-idx)
+                                     (t min-idx))))))
+    vlf-batch-size))
 
 (defun vlf-tune-load (types &optional region)
   "Adjust `vlf-batch-size' slightly to better load time.
 Optimize on TYPES on the nearby REGION.  Use 2 if REGION is nil."
-  (or region (setq region 2))
-  (let ((idx (vlf-tune-closest-index vlf-batch-size)))
-    (setq vlf-batch-size (vlf-tune-optimal-load types (- idx region)
-                                                (+ idx 1 region)))))
+  (when (eq vlf-tune-enabled t)
+    (or region (setq region 2))
+    (let ((idx (vlf-tune-closest-index vlf-batch-size)))
+      (setq vlf-batch-size (vlf-tune-optimal-load types (- idx region)
+                                                  (+ idx 1 region))))))
 
 (provide 'vlf-tune)
 

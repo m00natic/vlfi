@@ -39,8 +39,7 @@
 
 ;;; Code:
 
-(defgroup vlf nil "View Large Files in Emacs."
-  :prefix "vlf-" :group 'files)
+(require 'vlf-base)
 
 (defcustom vlf-before-batch-functions nil
   "Hook that runs before multiple batch operations.
@@ -53,8 +52,6 @@ values are: `write', `ediff', `occur', `search', `goto-line'."
 One argument is supplied that specifies current action.  Possible
 values are: `write', `ediff', `occur', `search', `goto-line'."
   :group 'vlf :type 'hook)
-
-(require 'vlf-base)
 
 (autoload 'vlf-write "vlf-write" "Write current chunk to file." t)
 (autoload 'vlf-re-search-forward "vlf-search"
