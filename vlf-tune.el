@@ -160,15 +160,17 @@ SIZE is number of bytes that are saved."
 
 (defun vlf-tune-hexlify ()
   "Activate `hexl-mode' and save time it takes."
-  (let ((time (car (vlf-time (hexl-mode)))))
-    (vlf-tune-add-measurement vlf-tune-hexl-bps
-                              hexl-max-address time)))
+  (or (derived-mode-p 'hexl-mode)
+      (let ((time (car (vlf-time (hexl-mode)))))
+        (vlf-tune-add-measurement vlf-tune-hexl-bps
+                                  hexl-max-address time))))
 
 (defun vlf-tune-dehexlify ()
   "Exit `hexl-mode' and save time it takes."
-  (let ((time (car (vlf-time (hexl-mode-exit)))))
-    (vlf-tune-add-measurement vlf-tune-dehexlify-bps
-                              hexl-max-address time)))
+  (if (derived-mode-p 'hexl-mode)
+      (let ((time (car (vlf-time (hexl-mode-exit)))))
+        (vlf-tune-add-measurement vlf-tune-dehexlify-bps
+                                  hexl-max-address time))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; tuning
@@ -238,20 +240,26 @@ If APPROXIMATE is t, do approximation for missing values."
                                     index t))
               0)))
 
-(defun vlf-tune-score (types index &optional approximate)
+(defun vlf-tune-score (types index &optional approximate time-max)
   "Calculate cumulative speed over TYPES for INDEX.
-If APPROXIMATE is t, do approximation for missing values."
+If APPROXIMATE is t, do approximation for missing values.
+If TIME-MAX is non nil, return cumulative time instead of speed.
+If it is number, stop as soon as cumulative time gets equal or above."
   (catch 'result
     (let ((time 0)
-          (size (* (1+ index) vlf-tune-step)))
-      (dolist (el types (/ size time))
+          (size (* (1+ index) vlf-tune-step))
+          (cut-time (numberp time-max)))
+      (dolist (el types (if time-max time
+                          (/ size time)))
         (let ((bps (if (consp el)
                        (vlf-tune-assess (car el) (cadr el) index
                                         approximate)
                      (vlf-tune-assess el 1 index approximate))))
           (if (zerop bps)
               (throw 'result nil)
-            (setq time (+ time (/ size bps)))))))))
+            (setq time (+ time (/ size bps)))
+            (and cut-time (<= time-max time)
+                 (throw 'result nil))))))))
 
 (defun vlf-tune-conservative (types &optional index)
   "Adjust `vlf-batch-size' to best nearby value over TYPES.
@@ -348,17 +356,23 @@ Suitable for multiple batch operations."
                  (vlf-tune-binary types 0 max-idx)))))))
 
 (defun vlf-tune-get-optimal (types)
-  "Get best batch size according to existing measurements over TYPES."
+  "Get best batch size according to existing measurements over TYPES.
+Best is considered where primitive operations total closest to second."
   (let ((max-idx (1- (/ (min vlf-tune-max (/ (1+ vlf-file-size) 2))
                         vlf-tune-step)))
+        (idx 0)
         (best-idx 0)
-        (best-bps 0)
-        (idx 0))
-    (while (< idx max-idx)
-      (let ((bps (vlf-tune-score types idx t)))
-        (and bps (< best-bps bps)
-             (setq best-idx idx
-                   best-bps bps)))
+        (best-time-diff 1))
+    (while (and (not (zerop best-time-diff)) (< idx max-idx))
+      (let ((time-diff (vlf-tune-score types idx t
+                                       (1+ best-time-diff))))
+        (when time-diff
+          (setq time-diff (if (< 1 time-diff)
+                              (- time-diff 1)
+                            (- 1 time-diff)))
+          (if (< time-diff best-time-diff)
+              (setq best-idx idx
+                    best-time-diff time-diff))))
       (setq idx (1+ idx)))
     (* (1+ best-idx) vlf-tune-step)))
 

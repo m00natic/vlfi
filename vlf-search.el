@@ -158,6 +158,10 @@ Return nil if nothing found."
       (if success
           (vlf-update-buffer-name)
         (vlf-move-to-chunk match-chunk-start match-chunk-end))
+      (setq vlf-batch-size (vlf-tune-get-optimal
+                            (if (derived-mode-p 'hexl-mode)
+                                '(:hexl :dehexlify :insert :encode)
+                              '(:insert :encode))))
       (let* ((match-end (or (byte-to-position (- match-pos-end
                                                  vlf-start-pos))
                             (point-max)))
