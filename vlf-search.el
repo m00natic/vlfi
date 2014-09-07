@@ -33,7 +33,8 @@
                              &optional reporter time)
   "Search for REGEXP COUNT number of times forward or BACKWARD.
 BATCH-STEP is amount of overlap between successive chunks.
-Use existing REPORTER and start TIME if given."
+Use existing REPORTER and start TIME if given.
+Return t if search has been at least partially successful."
   (if (<= count 0)
       (error "Count must be positive"))
   (run-hook-with-args 'vlf-before-batch-functions 'search)
@@ -125,15 +126,18 @@ Use existing REPORTER and start TIME if given."
                                                   vlf-end-pos)))))
            (progress-reporter-done reporter))
        (set-buffer-modified-p nil)
+       (if is-hexl (vlf-tune-hexlify))
        (if font-lock (font-lock-mode 1))
-       (if backward
-           (vlf-goto-match match-chunk-start match-chunk-end
-                           match-end-pos match-start-pos
-                           count to-find time)
-         (vlf-goto-match match-chunk-start match-chunk-end
-                         match-start-pos match-end-pos
-                         count to-find time))
-       (run-hook-with-args 'vlf-after-batch-functions 'search)))))
+       (let ((result
+              (if backward
+                  (vlf-goto-match match-chunk-start match-chunk-end
+                                  match-end-pos match-start-pos
+                                  count to-find time)
+                (vlf-goto-match match-chunk-start match-chunk-end
+                                match-start-pos match-end-pos
+                                count to-find time))))
+         (run-hook-with-args 'vlf-after-batch-functions 'search)
+         result)))))
 
 (defun vlf-goto-match (match-chunk-start match-chunk-end
                                          match-pos-start match-pos-end
@@ -179,7 +183,9 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                                       (if regexp-history
                                           (car regexp-history)))
                          (or current-prefix-arg 1))))
-  (vlf-re-search regexp count nil (min 1024 (/ vlf-batch-size 8))))
+  (let ((batch-size vlf-batch-size))
+    (or (vlf-re-search regexp count nil (min 1024 (/ vlf-batch-size 8)))
+        (setq vlf-batch-size batch-size))))
 
 (defun vlf-re-search-backward (regexp count)
   "Search backward for REGEXP prefix COUNT number of times.
@@ -189,7 +195,9 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                                       (if regexp-history
                                           (car regexp-history)))
                          (or current-prefix-arg 1))))
-  (vlf-re-search regexp count t (min 1024 (/ vlf-batch-size 8))))
+  (let ((batch-size vlf-batch-size))
+    (or (vlf-re-search regexp count t (min 1024 (/ vlf-batch-size 8)))
+        (setq vlf-batch-size batch-size))))
 
 (defun vlf-goto-line (n)
   "Go to line N.  If N is negative, count from the end of file."
@@ -201,6 +209,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                            (min tramp-verbose 2)))
         (start-pos vlf-start-pos)
         (end-pos vlf-end-pos)
+        (batch-size vlf-batch-size)
         (pos (point))
         (is-hexl (derived-mode-p 'hexl-mode))
         (font-lock font-lock-mode)
@@ -276,6 +285,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
          (vlf-move-to-chunk-2 start-pos end-pos))
         (vlf-update-buffer-name)
         (goto-char pos)
+        (setq vlf-batch-size batch-size)
         (message "Unable to find line"))
       (run-hook-with-args 'vlf-after-batch-functions 'goto-line))))
 
