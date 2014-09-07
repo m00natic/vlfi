@@ -158,7 +158,7 @@ Return nil if nothing found."
       (if success
           (vlf-update-buffer-name)
         (vlf-move-to-chunk match-chunk-start match-chunk-end))
-      (setq vlf-batch-size (vlf-tune-get-optimal
+      (setq vlf-batch-size (vlf-tune-optimal-load
                             (if (derived-mode-p 'hexl-mode)
                                 '(:hexl :dehexlify :insert :encode)
                               '(:insert :encode))))
