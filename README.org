@@ -1,11 +1,11 @@
 * View Large Files
 
 Emacs minor mode that allows viewing, editing, searching and comparing
-large files in batches.  Batch size can be adjusted on the fly and
-bounds the memory that is to be used for operations on the file.  This
-way multiple large files (like terabytes or whatever) can be instantly
-and simultaneously accessed without swapping and degraded
-performance.
+large files in batches, trading memory for processor time.  Batch size
+can be adjusted on the fly and bounds the memory that is to be used
+for operations on the file.  This way multiple large files (like
+terabytes or whatever) can be instantly and simultaneously accessed
+without swapping and degraded performance.
 
 This is development version of the GNU ELPA [[http://elpa.gnu.org/packages/vlf][VLF]] package.  Here's what
 it offers in a nutshell:
@@ -16,10 +16,10 @@ it offers in a nutshell:
   constant memory determined by current batch size otherwise)
 - [[http://www.emacswiki.org/emacs/OccurMode][Occur]] like indexing
 - options to jump to beginning, end or arbitrary file chunk
-- ability to jump/insert given number of batches at once
 - newly added content is acknowledged if file has changed size
   meanwhile
 - automatic scrolling of batches
+- automatic adjustment of batch size for optimal performance
 - as it's a minor mode, font locking and functionality of the
   respective major mode is also present
 - by batch [[http://www.emacswiki.org/emacs/EdiffMode][Ediff]] comparison
@@ -45,19 +45,15 @@ Regular Emacs integers are used, so if you use 32-bit Emacs without
 bignum support, *VLF* will not work with files over 512 MB (maximum
 integer value).
 
-** Memory control
-
-*vlf-batch-size* bounds the memory used for all operations.
-
 * Detail usage
 
 ** Applicability
 
 To have *vlf* offered as choice when opening large files:
 
-#+BEGIN_EXAMPLE
-(require 'vlf-integrate)
-#+END_EXAMPLE
+#+BEGIN_SRC emacs-lisp
+  (require 'vlf-integrate)
+#+END_SRC
 
 You can control when *vlf-mode* is invoked or offered with the
 *vlf-application* customization option.  By default it will offer
@@ -66,10 +62,10 @@ it (you can still call *vlf* command explicitly); to use it without
 asking for large files or to invoke it on all files.  Here's example
 setup such that *vlf-mode* automatically launches for large files:
 
-#+BEGIN_EXAMPLE
-(custom-set-variables
- '(vlf-application 'dont-ask))
-#+END_EXAMPLE
+#+BEGIN_SRC emacs-lisp
+  (custom-set-variables
+   '(vlf-application 'dont-ask))
+#+END_SRC
 
 *** Disable for specific mode
 
@@ -81,24 +77,44 @@ To disable automatic usage of *VLF* for a major mode, add it to
 To disable automatic usage of *VLF* for a function, for example named
 *func* defined in file *file.el*:
 
-#+BEGIN_EXAMPLE
-(vlf-disable-for-function func "file")
-#+END_EXAMPLE
+#+BEGIN_SRC emacs-lisp
+  (vlf-disable-for-function func "file")
+#+END_SRC
 
 ** Keymap
 
 All *VLF* operations are grouped under the *C-c C-v* prefix by
 default.  Here's example how to add another prefix (*C-x v*):
 
-#+BEGIN_EXAMPLE
-(eval-after-load "vlf"
-  '(define-key vlf-prefix-map "\C-xv" vlf-mode-map))
-#+END_EXAMPLE
+#+BEGIN_SRC emacs-lisp
+  (eval-after-load "vlf"
+    '(define-key vlf-prefix-map "\C-xv" vlf-mode-map))
+#+END_SRC
 
-** Control batch size
+** Batch size control
+
+By default *VLF* gathers statistics over how primitive operations
+perform over file and gradually adjusts batch size for better user
+experience.  Operations involving multiple batches are tuned more
+adventurously.  Overall the more jumping around, searching, indexing,
+the better performance should get.
+
+The *vlf-tune-max* option specifies maximum size in bytes a batch
+could eventually get while tuning.
+
+Profiling and tuning can be disabled by:
+
+#+BEGIN_SRC emacs-lisp
+  (custom-set-variables
+     '(vlf-tune-enabled nil))
+#+END_SRC
+
+Or set *vlf-tune-enabled* to '*stats* to profile but not change batch
+size.
 
 Use *M-x vlf-set-batch-size* to change batch size and update chunk
-immediately.
+immediately.  Default size offered is the best according to tune
+statistics so far.
 
 *C-c C-v +* and *C-c C-v -* control current batch size by factors
 of 2.
@@ -130,33 +146,28 @@ toggled with *C-c C-v f*.
 ** Search whole file
 
 *C-c C-v s* and *C-c C-v r* search forward and backward respectively
-over the whole file.  This is done batch by batch so if you have
-really huge file - you'd better set somewhat bigger batch size
-beforehand.
+over the whole file, batch by batch.
 
 ** Occur over whole file
 
-*C-c C-v o* builds index for given regular expression just like
-*M-x occur*.  It does so batch by batch over the whole file.  Note
-that even if you prematurely stop it with *C-g*, it will still show
-index of what's found so far.
+*C-c C-v o* builds index over whole file for given regular expression
+just like *M-x occur*.  Note that even if you prematurely stop it with
+*C-g*, it will still show what's found so far.
 
 Result buffer uses *vlf-occur-mode* which allows to optionally open
-new VLF buffer on jump to match (using *C-u* before hitting RET or
-*o*).  Also results can be serialized to file for later reuse.
+new *VLF* buffer on jump to match (using *C-u* before hitting RET or
+*o*), thus having multiple simultaneous views of the same file.  Also
+results can be serialized to file for later reuse.
 
 ** Jump to line
 
-*C-c C-v l* jumps to given line in file.  This is done by searching
-from the beginning, so again the bigger current batch size, probably
-the quicker.  With negative argument, lines are counted from the end
-of file.
+*C-c C-v l* jumps to given line in file.  With negative argument,
+lines are counted from the end of file.
 
 ** Edit and save
 
 If editing doesn't change size of the chunk, only this chunk is saved.
-Otherwise the remaining part of the file is adjusted batch by batch,
-so again you'd better have bigger current batch size.
+Otherwise the remaining part of the file is adjusted batch by batch.
 
 ** By batch Ediff
 
