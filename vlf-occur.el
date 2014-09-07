@@ -161,28 +161,31 @@ Prematurely ending indexing will still show what's found so far."
             buffer-undo-list t)
       (set-buffer-modified-p nil)
       (set (make-local-variable 'vlf-batch-size) batch-size)
-      (setq vlf-tune-insert-bps insert-bps
-            vlf-tune-encode-bps encode-bps)
-      (if is-hexl
-          (progn (setq vlf-tune-hexl-bps hexl-bps
-                       vlf-tune-dehexlify-bps dehexlify-bps)
-                 (vlf-tune-batch '(:hexl :dehexlify :insert :encode)))
-        (vlf-tune-batch '(:insert :encode)))
+      (when vlf-tune-enabled
+        (setq vlf-tune-insert-bps insert-bps
+              vlf-tune-encode-bps encode-bps)
+        (if is-hexl
+            (progn (setq vlf-tune-hexl-bps hexl-bps
+                         vlf-tune-dehexlify-bps dehexlify-bps)
+                   (vlf-tune-batch '(:hexl :dehexlify :insert :encode)))
+          (vlf-tune-batch '(:insert :encode))))
       (vlf-mode 1)
       (if is-hexl (vlf-tune-hexlify))
       (goto-char (point-min))
       (vlf-with-undo-disabled
        (vlf-build-occur regexp vlf-buffer))
-      (setq insert-bps vlf-tune-insert-bps
-            encode-bps vlf-tune-encode-bps)
+      (when vlf-tune-enabled
+        (setq insert-bps vlf-tune-insert-bps
+              encode-bps vlf-tune-encode-bps)
+        (if is-hexl
+            (setq insert-bps vlf-tune-insert-bps
+                  encode-bps vlf-tune-encode-bps))))
+    (when vlf-tune-enabled              ;merge back tune measurements
+      (setq vlf-tune-insert-bps insert-bps
+            vlf-tune-encode-bps encode-bps)
       (if is-hexl
-          (setq insert-bps vlf-tune-insert-bps
-                encode-bps vlf-tune-encode-bps)))
-    (setq vlf-tune-insert-bps insert-bps
-          vlf-tune-encode-bps encode-bps)
-    (if is-hexl
-        (setq vlf-tune-insert-bps insert-bps
-              vlf-tune-encode-bps encode-bps))))
+          (setq vlf-tune-insert-bps insert-bps
+                vlf-tune-encode-bps encode-bps)))))
 
 (defun vlf-occur (regexp)
   "Make whole file occur style index for REGEXP.
@@ -196,16 +199,18 @@ Prematurely ending indexing will still show what's found so far."
       (vlf-occur-other-buffer regexp)
     (let ((start-pos vlf-start-pos)
           (end-pos vlf-end-pos)
-          (pos (point)))
-      (if (derived-mode-p 'hexl-mode)
-          (vlf-tune-batch '(:hexl :dehexlify :insert :encode))
-        (vlf-tune-batch '(:insert :encode)))
+          (pos (point))
+          (batch-size vlf-batch-size))
+      (vlf-tune-batch (if (derived-mode-p 'hexl-mode)
+                          '(:hexl :dehexlify :insert :encode)
+                        '(:insert :encode)))
       (vlf-with-undo-disabled
        (vlf-move-to-batch 0)
        (goto-char (point-min))
        (unwind-protect (vlf-build-occur regexp (current-buffer))
          (vlf-move-to-chunk start-pos end-pos)
-         (goto-char pos)))))
+         (goto-char pos)))
+      (setq vlf-batch-size batch-size)))
   (run-hook-with-args 'vlf-after-batch-functions 'occur))
 
 (defun vlf-build-occur (regexp vlf-buffer)

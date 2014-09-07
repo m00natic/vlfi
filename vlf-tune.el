@@ -213,8 +213,10 @@ unless DONT-APPROXIMATE is t."
                      `(aset ,vec ,index 0)
                    `(vlf-tune-approximate-nearby ,vec ,index)))
                ((zerop val) ;index has been tried before, yet still no value
-                (aset ,vec ,index
-                      (vlf-tune-approximate-nearby ,vec ,index)))
+                ,(if dont-approximate
+                     `(aset ,vec ,index
+                            (vlf-tune-approximate-nearby ,vec ,index))
+                   `(vlf-tune-approximate-nearby ,vec ,index)))
                (t val)))))
 
 (defmacro vlf-tune-get-vector (key)

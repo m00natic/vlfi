@@ -172,9 +172,9 @@ When prefix argument is negative
  append next APPEND number of batches to the existing buffer."
   (interactive "p")
   (vlf-verify-size)
-  (if (derived-mode-p 'hexl-mode)
-      (vlf-tune-conservative '(:hexl :dehexlify :insert :encode))
-    (vlf-tune-conservative '(:insert :encode)))
+  (vlf-tune-conservative (if (derived-mode-p 'hexl-mode)
+                             '(:hexl :dehexlify :insert :encode)
+                           '(:insert :encode)))
   (let* ((end (min (+ vlf-end-pos (* vlf-batch-size (abs append)))
                    vlf-file-size))
          (start (if (< append 0)
@@ -191,9 +191,9 @@ When prefix argument is negative
   (interactive "p")
   (if (zerop vlf-start-pos)
       (error "Already at BOF"))
-  (if (derived-mode-p 'hexl-mode)
-      (vlf-tune-conservative '(:hexl :dehexlify :insert :encode))
-    (vlf-tune-conservative '(:insert :encode)))
+  (vlf-tune-conservative (if (derived-mode-p 'hexl-mode)
+                             '(:hexl :dehexlify :insert :encode)
+                           '(:insert :encode)))
   (let* ((start (max 0 (- vlf-start-pos (* vlf-batch-size (abs prepend)))))
          (end (if (< prepend 0)
                   vlf-end-pos
@@ -271,18 +271,18 @@ with the prefix argument DECREASE it is halved."
 (defun vlf-beginning-of-file ()
   "Jump to beginning of file content."
   (interactive)
-  (if (derived-mode-p 'hexl-mode)
-      (vlf-tune-conservative '(:hexl :dehexlify :insert :encode))
-    (vlf-tune-conservative '(:insert :encode)))
+  (vlf-tune-conservative (if (derived-mode-p 'hexl-mode)
+                             '(:hexl :dehexlify :insert :encode)
+                           '(:insert :encode)))
   (vlf-move-to-batch 0))
 
 (defun vlf-end-of-file ()
   "Jump to end of file content."
   (interactive)
   (vlf-verify-size)
-  (if (derived-mode-p 'hexl-mode)
-      (vlf-tune-conservative '(:hexl :dehexlify :insert :encode))
-    (vlf-tune-conservative '(:insert :encode)))
+  (vlf-tune-conservative (if (derived-mode-p 'hexl-mode)
+                             '(:hexl :dehexlify :insert :encode)
+                           '(:insert :encode)))
   (vlf-move-to-batch vlf-file-size))
 
 (defun vlf-revert (&optional _auto noconfirm)
@@ -298,6 +298,9 @@ Ask for confirmation if NOCONFIRM is nil."
 (defun vlf-jump-to-chunk (n)
   "Go to to chunk N."
   (interactive "nGoto to chunk: ")
+  (vlf-tune-conservative (if (derived-mode-p 'hexl-mode)
+                             '(:hexl :dehexlify :insert :encode)
+                           '(:insert :encode)))
   (vlf-move-to-batch (* (1- n) vlf-batch-size)))
 
 (defun vlf-no-modifications ()
