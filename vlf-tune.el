@@ -376,11 +376,10 @@ Best considered where primitive operations total is closest to
 confine search to this region."
   (if vlf-tune-enabled
       (progn
-        (or max-idx
-            (setq max-idx (min max-idx
-                               (1- (/ (min vlf-tune-max
-                                           (/ (1+ vlf-file-size) 2))
-                                      vlf-tune-step)))))
+        (setq max-idx (min (or max-idx vlf-tune-max)
+                           (1- (/ (min vlf-tune-max
+                                       (/ (1+ vlf-file-size) 2))
+                                  vlf-tune-step))))
         (let* ((idx (max 0 (or min-idx 0)))
                (best-idx idx)
                (best-time-diff vlf-tune-load-time)
