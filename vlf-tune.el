@@ -389,16 +389,18 @@ confine search to this region."
             (let ((time-diff (vlf-tune-score types idx t
                                              (+ vlf-tune-load-time
                                                 best-time-diff))))
-              (when time-diff
-                (setq time-diff (if (< vlf-tune-load-time time-diff)
-                                    (progn (setq all-less nil)
-                                           (- time-diff
-                                              vlf-tune-load-time))
-                                  (setq all-more nil)
-                                  (- vlf-tune-load-time time-diff)))
-                (if (< time-diff best-time-diff)
-                    (setq best-idx idx
-                          best-time-diff time-diff))))
+              (if time-diff
+                  (progn
+                    (setq time-diff (if (< vlf-tune-load-time time-diff)
+                                        (progn (setq all-less nil)
+                                               (- time-diff
+                                                  vlf-tune-load-time))
+                                      (setq all-more nil)
+                                      (- vlf-tune-load-time time-diff)))
+                    (if (< time-diff best-time-diff)
+                        (setq best-idx idx
+                              best-time-diff time-diff)))
+                (setq all-less nil)))
             (setq idx (1+ idx)))
           (* vlf-tune-step (1+ (cond ((or (zerop best-time-diff)
                                           (eq all-less all-more))
