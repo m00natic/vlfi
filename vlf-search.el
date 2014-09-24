@@ -207,91 +207,109 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
   "Go to line N.  If N is negative, count from the end of file."
   (interactive (if (vlf-no-modifications)
                    (list (read-number "Go to line: "))))
-  (run-hook-with-args 'vlf-before-batch-functions 'goto-line)
-  (vlf-verify-size)
-  (let ((tramp-verbose (if (boundp 'tramp-verbose)
-                           (min tramp-verbose 2)))
-        (start-pos vlf-start-pos)
-        (end-pos vlf-end-pos)
-        (batch-size vlf-batch-size)
-        (pos (point))
-        (is-hexl (derived-mode-p 'hexl-mode))
-        (font-lock font-lock-mode)
-        (time (float-time))
-        (success nil))
-    (font-lock-mode 0)
-    (vlf-tune-batch '(:raw))
-    (unwind-protect
-        (if (< 0 n)
-            (let ((start 0)
-                  (end (min vlf-batch-size vlf-file-size))
+  (if (derived-mode-p 'hexl-mode)
+      (vlf-goto-line-hexl n)
+    (run-hook-with-args 'vlf-before-batch-functions 'goto-line)
+    (vlf-verify-size)
+    (let ((tramp-verbose (if (boundp 'tramp-verbose)
+                             (min tramp-verbose 2)))
+          (start-pos vlf-start-pos)
+          (end-pos vlf-end-pos)
+          (batch-size vlf-batch-size)
+          (pos (point))
+          (font-lock font-lock-mode)
+          (time (float-time))
+          (success nil))
+      (font-lock-mode 0)
+      (vlf-tune-batch '(:raw))
+      (unwind-protect
+          (if (< 0 n)
+              (let ((start 0)
+                    (end (min vlf-batch-size vlf-file-size))
+                    (reporter (make-progress-reporter
+                               (concat "Searching for line "
+                                       (number-to-string n) "...")
+                               0 vlf-file-size))
+                    (inhibit-read-only t))
+                (setq n (1- n))
+                (vlf-with-undo-disabled
+                 (while (and (< (- end start) n)
+                             (< n (- vlf-file-size start)))
+                   (erase-buffer)
+                   (vlf-tune-insert-file-contents-literally start end)
+                   (goto-char (point-min))
+                   (while (re-search-forward "[\n\C-m]" nil t)
+                     (setq n (1- n)))
+                   (vlf-verify-size)
+                   (vlf-tune-batch '(:raw))
+                   (setq start end
+                         end (min vlf-file-size (+ start
+                                                   vlf-batch-size)))
+                   (progress-reporter-update reporter start))
+                 (when (< n (- vlf-file-size end))
+                   (vlf-tune-batch '(:insert :encode))
+                   (vlf-move-to-chunk-2 start (+ start vlf-batch-size))
+                   (goto-char (point-min))
+                   (setq success (vlf-re-search "[\n\C-m]" n nil 0
+                                                reporter time)))))
+            (let ((start (max 0 (- vlf-file-size vlf-batch-size)))
+                  (end vlf-file-size)
                   (reporter (make-progress-reporter
-                             (concat "Searching for line "
+                             (concat "Searching for line -"
                                      (number-to-string n) "...")
                              0 vlf-file-size))
                   (inhibit-read-only t))
-              (setq n (1- n))
+              (setq n (- n))
               (vlf-with-undo-disabled
-               (or is-hexl
-                   (while (and (< (- end start) n)
-                               (< n (- vlf-file-size start)))
-                     (erase-buffer)
-                     (vlf-tune-insert-file-contents-literally start end)
-                     (goto-char (point-min))
-                     (while (re-search-forward "[\n\C-m]" nil t)
-                       (setq n (1- n)))
-                     (vlf-verify-size)
-                     (vlf-tune-batch '(:raw))
-                     (setq start end
-                           end (min vlf-file-size
-                                    (+ start vlf-batch-size)))
-                     (progress-reporter-update reporter start)))
-               (when (< n (- vlf-file-size end))
-                 (vlf-tune-batch (if is-hexl
-                                     '(:hexl :dehexlify :insert :encode)
-                                   '(:insert :encode)))
-                 (vlf-move-to-chunk-2 start (+ start vlf-batch-size))
-                 (goto-char (point-min))
-                 (setq success (vlf-re-search "[\n\C-m]" n nil 0
-                                              reporter time)))))
-          (let ((start (max 0 (- vlf-file-size vlf-batch-size)))
-                (end vlf-file-size)
-                (reporter (make-progress-reporter
-                           (concat "Searching for line -"
-                                   (number-to-string n) "...")
-                           0 vlf-file-size))
-                (inhibit-read-only t))
-            (setq n (- n))
-            (vlf-with-undo-disabled
-             (or is-hexl
-                 (while (and (< (- end start) n) (< n end))
-                   (erase-buffer)
-                   (vlf-tune-insert-file-contents-literally start end)
-                   (goto-char (point-max))
-                   (while (re-search-backward "[\n\C-m]" nil t)
-                     (setq n (1- n)))
-                   (vlf-tune-batch '(:raw))
-                   (setq end start
-                         start (max 0 (- end vlf-batch-size)))
-                   (progress-reporter-update reporter
-                                             (- vlf-file-size end))))
-             (when (< n end)
-               (vlf-tune-batch (if is-hexl
-                                   '(:hexl :dehexlify :insert :encode)
-                                 '(:insert :encode)))
-               (vlf-move-to-chunk-2 (- end vlf-batch-size) end)
-               (goto-char (point-max))
-               (setq success (vlf-re-search "[\n\C-m]" n t 0
-                                            reporter time))))))
-      (if font-lock (font-lock-mode 1))
-      (unless success
-        (vlf-with-undo-disabled
-         (vlf-move-to-chunk-2 start-pos end-pos))
-        (vlf-update-buffer-name)
-        (goto-char pos)
-        (setq vlf-batch-size batch-size)
-        (message "Unable to find line"))
-      (run-hook-with-args 'vlf-after-batch-functions 'goto-line))))
+               (while (and (< (- end start) n) (< n end))
+                 (erase-buffer)
+                 (vlf-tune-insert-file-contents-literally start end)
+                 (goto-char (point-max))
+                 (while (re-search-backward "[\n\C-m]" nil t)
+                   (setq n (1- n)))
+                 (vlf-tune-batch '(:raw))
+                 (setq end start
+                       start (max 0 (- end vlf-batch-size)))
+                 (progress-reporter-update reporter
+                                           (- vlf-file-size end)))
+               (when (< n end)
+                 (vlf-tune-batch '(:insert :encode))
+                 (vlf-move-to-chunk-2 (- end vlf-batch-size) end)
+                 (goto-char (point-max))
+                 (setq success (vlf-re-search "[\n\C-m]" n t 0
+                                              reporter time))))))
+        (if font-lock (font-lock-mode 1))
+        (unless success
+          (vlf-with-undo-disabled
+           (vlf-move-to-chunk-2 start-pos end-pos))
+          (vlf-update-buffer-name)
+          (goto-char pos)
+          (setq vlf-batch-size batch-size)
+          (message "Unable to find line"))
+        (run-hook-with-args 'vlf-after-batch-functions 'goto-line)))))
+
+(defun vlf-goto-line-hexl (n)
+  "Go to line N.  If N is negative, count from the end of file.
+Assume `hexl-mode' is active."
+  (vlf-tune-load '(:hexl :raw))
+  (if (< n 0)
+      (let ((hidden-bytes (+ vlf-file-size (* n hexl-bits))))
+        (setq hidden-bytes (- hidden-bytes (mod hidden-bytes
+                                                vlf-batch-size)))
+        (vlf-move-to-batch hidden-bytes)
+        (goto-char (point-max))
+        (forward-line (+ (round (- vlf-file-size
+                                   (min vlf-file-size
+                                        (+ hidden-bytes
+                                           vlf-batch-size)))
+                                hexl-bits)
+                         n)))
+    (let ((hidden-bytes (1- (* n hexl-bits))))
+      (setq hidden-bytes (- hidden-bytes (mod hidden-bytes
+                                              vlf-batch-size)))
+      (vlf-move-to-batch hidden-bytes)
+      (goto-char (point-min))
+      (forward-line (- n 1 (/ hidden-bytes hexl-bits))))))
 
 (provide 'vlf-search)
 
