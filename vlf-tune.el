@@ -174,17 +174,17 @@ SIZE is number of bytes that are saved."
 
 (defun vlf-tune-hexlify ()
   "Activate `hexl-mode' and save time it takes."
-  (or (derived-mode-p 'hexl-mode)
-      (let ((time (car (vlf-time (hexl-mode)))))
-        (vlf-tune-add-measurement vlf-tune-hexl-bps
-                                  hexl-max-address time))))
+  (let ((time (car (vlf-time (hexlify-buffer)))))
+    (setq hexl-max-address (+ (* (/ (1- (buffer-size))
+                                    (hexl-line-displen)) 16) 15))
+    (vlf-tune-add-measurement vlf-tune-hexl-bps
+                              hexl-max-address time)))
 
 (defun vlf-tune-dehexlify ()
   "Exit `hexl-mode' and save time it takes."
-  (if (derived-mode-p 'hexl-mode)
-      (let ((time (car (vlf-time (hexl-mode-exit)))))
-        (vlf-tune-add-measurement vlf-tune-dehexlify-bps
-                                  hexl-max-address time))))
+  (let ((time (car (vlf-time (dehexlify-buffer)))))
+    (vlf-tune-add-measurement vlf-tune-dehexlify-bps
+                              hexl-max-address time)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; tuning
@@ -233,7 +233,8 @@ unless DONT-APPROXIMATE is t."
                      `(aset ,vec ,index
                             (vlf-tune-approximate-nearby ,vec ,index))
                    `(vlf-tune-approximate-nearby ,vec ,index)))
-               (t val)))))
+               (t val)))
+     most-positive-fixnum))
 
 (defmacro vlf-tune-get-vector (key)
   "Get vlf-tune vector corresponding to KEY."
@@ -268,7 +269,7 @@ If it is number, stop as soon as cumulative time gets equal or above."
         (let ((bps (if (consp el)
                        (vlf-tune-assess (car el) (cadr el) index
                                         approximate)
-                     (vlf-tune-assess el 1 index approximate))))
+                     (vlf-tune-assess el 1.0 index approximate))))
           (if (zerop bps)
               (throw 'result nil)
             (setq time (+ time (/ size bps)))
@@ -332,7 +333,7 @@ MIN and MAX specify interval of indexes to search."
           (setq vlf-batch-size (* (1+ left-idx) vlf-tune-step)))))))
 
 (defun vlf-tune-linear (types max-idx)
-  "Adjust `vlf-batch-size' to optimal value using linear search, \
+  "Adjust `vlf-batch-size' to optimal value using linear search,\
 optimizing over TYPES up to MAX-IDX."
   (let ((best-idx 0)
         (best-bps 0)
@@ -346,7 +347,7 @@ optimizing over TYPES up to MAX-IDX."
               ((< best-bps bps) (setq best-idx idx
                                       best-bps bps))))
       (setq idx (1+ idx)))
-    (or (not none-missing)
+    (if none-missing
         (setq vlf-batch-size (* (1+ best-idx) vlf-tune-step)))))
 
 (defun vlf-tune-batch (types &optional linear)
@@ -376,11 +377,12 @@ Best considered where primitive operations total is closest to
 confine search to this region."
   (if vlf-tune-enabled
       (progn
-        (setq max-idx (min (or max-idx vlf-tune-max)
+        (setq min-idx (max 0 (or min-idx 0))
+              max-idx (min (or max-idx vlf-tune-max)
                            (1- (/ (min vlf-tune-max
                                        (/ (1+ vlf-file-size) 2))
                                   vlf-tune-step))))
-        (let* ((idx (max 0 (or min-idx 0)))
+        (let* ((idx min-idx)
                (best-idx idx)
                (best-time-diff vlf-tune-load-time)
                (all-less t)

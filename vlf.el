@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2006, 2012-2014 Free Software Foundation, Inc.
 
-;; Version: 1.6
+;; Version: 1.7
 ;; Keywords: large files, utilities
 ;; Maintainer: Andrey Kotlarski <m00naticus@gmail.com>
 ;; Authors: 2006 Mathias Dahl <mathias.dahl@gmail.com>
@@ -125,13 +125,23 @@ values are: `write', `ediff', `occur', `search', `goto-line'."
          (remove-hook 'write-file-functions 'vlf-write t)
          (remove-hook 'after-change-major-mode-hook
                       'vlf-keep-alive t)
-         (let ((hexl (derived-mode-p 'hexl-mode)))
-           (if hexl (hexl-mode-exit))
+         (if (derived-mode-p 'hexl-mode)
+             (let ((line (/ (1+ vlf-start-pos) hexl-bits))
+                   (pos (point)))
+               (if (consp buffer-undo-list)
+                   (setq buffer-undo-list nil))
+               (vlf-with-undo-disabled
+                (insert-file-contents-literally buffer-file-name
+                                                t nil nil t)
+                (hexlify-buffer))
+               (set-buffer-modified-p nil)
+               (goto-char (point-min))
+               (forward-line line)
+               (forward-char pos))
            (let ((pos (+ vlf-start-pos (position-bytes (point)))))
              (vlf-with-undo-disabled
               (insert-file-contents buffer-file-name t nil nil t))
-             (goto-char (byte-to-position pos)))
-           (if hexl (hexl-mode)))
+             (goto-char (byte-to-position pos))))
          (rename-buffer (file-name-nondirectory buffer-file-name) t))
         (t (setq vlf-mode t))))
 
@@ -170,7 +180,7 @@ When prefix argument is negative
   (interactive "p")
   (vlf-verify-size)
   (vlf-tune-load (if (derived-mode-p 'hexl-mode)
-                     '(:hexl :dehexlify :insert :encode)
+                     '(:hexl :raw)
                    '(:insert :encode)))
   (let* ((end (min (+ vlf-end-pos (* vlf-batch-size (abs append)))
                    vlf-file-size))
@@ -189,7 +199,7 @@ When prefix argument is negative
   (if (zerop vlf-start-pos)
       (error "Already at BOF"))
   (vlf-tune-load (if (derived-mode-p 'hexl-mode)
-                     '(:hexl :dehexlify :insert :encode)
+                     '(:hexl :raw)
                    '(:insert :encode)))
   (let* ((start (max 0 (- vlf-start-pos (* vlf-batch-size (abs prepend)))))
          (end (if (< prepend 0)
@@ -241,6 +251,16 @@ When prefix argument is negative
        (if (and vlf-mode (pos-visible-in-window-p (point-min)))
            (progn (vlf-prev-batch 1)
                   (goto-char (point-max)))
+         ad-do-it))
+
+     (defadvice hexl-mode-exit (around vlf-hexl-mode-exit
+                                       activate compile)
+       "Exit `hexl-mode' gracefully in case `vlf-mode' is active."
+       (if (and vlf-mode (not (buffer-modified-p)))
+           (vlf-with-undo-disabled
+            (erase-buffer)
+            ad-do-it
+            (vlf-move-to-chunk-2 vlf-start-pos vlf-end-pos))
          ad-do-it))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -260,7 +280,7 @@ with the prefix argument DECREASE it is halved."
    (list (read-number "Size in bytes: "
                       (vlf-tune-optimal-load
                        (if (derived-mode-p 'hexl-mode)
-                           '(:hexl :dehexlify :insert :encode)
+                           '(:hexl :raw)
                          '(:insert :encode))))))
   (setq vlf-batch-size size)
   (vlf-move-to-batch vlf-start-pos))
@@ -269,7 +289,7 @@ with the prefix argument DECREASE it is halved."
   "Jump to beginning of file content."
   (interactive)
   (vlf-tune-load (if (derived-mode-p 'hexl-mode)
-                     '(:hexl :dehexlify :insert :encode)
+                     '(:hexl :raw)
                    '(:insert :encode)))
   (vlf-move-to-batch 0))
 
@@ -278,7 +298,7 @@ with the prefix argument DECREASE it is halved."
   (interactive)
   (vlf-verify-size)
   (vlf-tune-load (if (derived-mode-p 'hexl-mode)
-                     '(:hexl :dehexlify :insert :encode)
+                     '(:hexl :raw)
                    '(:insert :encode)))
   (vlf-move-to-batch vlf-file-size))
 
@@ -296,7 +316,7 @@ Ask for confirmation if NOCONFIRM is nil."
   "Go to to chunk N."
   (interactive "nGoto to chunk: ")
   (vlf-tune-load (if (derived-mode-p 'hexl-mode)
-                     '(:hexl :dehexlify :insert :encode)
+                     '(:hexl :raw)
                    '(:insert :encode)))
   (vlf-move-to-batch (* (1- n) vlf-batch-size)))
 

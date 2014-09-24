@@ -54,7 +54,7 @@ Return t if search has been at least partially successful."
          (match-end-pos match-start-pos)
          (to-find count)
          (is-hexl (derived-mode-p 'hexl-mode))
-         (tune-types (if is-hexl '(:hexl :dehexlify :insert :encode)
+         (tune-types (if is-hexl '(:hexl :raw)
                        '(:insert :encode)))
          (font-lock font-lock-mode))
     (font-lock-mode 0)
@@ -160,7 +160,7 @@ Return nil if nothing found."
         (vlf-move-to-chunk match-chunk-start match-chunk-end))
       (setq vlf-batch-size (vlf-tune-optimal-load
                             (if (derived-mode-p 'hexl-mode)
-                                '(:hexl :dehexlify :insert :encode)
+                                '(:hexl :raw)
                               '(:insert :encode))))
       (let* ((match-end (or (byte-to-position (- match-pos-end
                                                  vlf-start-pos))

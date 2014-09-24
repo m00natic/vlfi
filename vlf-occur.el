@@ -154,7 +154,7 @@ Prematurely ending indexing will still show what's found so far."
         (insert-bps vlf-tune-insert-bps)
         (encode-bps vlf-tune-encode-bps)
         (hexl-bps vlf-tune-hexl-bps)
-        (dehexlify-bps vlf-tune-dehexlify-bps))
+        (insert-raw-bps vlf-tune-insert-raw-bps))
     (with-temp-buffer
       (setq buffer-file-name file
             buffer-file-truename file
@@ -166,26 +166,25 @@ Prematurely ending indexing will still show what's found so far."
               vlf-tune-encode-bps encode-bps)
         (if is-hexl
             (progn (setq vlf-tune-hexl-bps hexl-bps
-                         vlf-tune-dehexlify-bps dehexlify-bps)
-                   (vlf-tune-batch '(:hexl :dehexlify :insert :encode)))
+                         vlf-tune-insert-raw-bps insert-raw-bps)
+                   (vlf-tune-batch '(:hexl :raw)))
           (vlf-tune-batch '(:insert :encode))))
       (vlf-mode 1)
-      (if is-hexl (vlf-tune-hexlify))
+      (if is-hexl (hexl-mode))
       (goto-char (point-min))
-      (vlf-with-undo-disabled
-       (vlf-build-occur regexp vlf-buffer))
+      (vlf-build-occur regexp vlf-buffer)
       (when vlf-tune-enabled
         (setq insert-bps vlf-tune-insert-bps
               encode-bps vlf-tune-encode-bps)
         (if is-hexl
-            (setq insert-bps vlf-tune-insert-bps
-                  encode-bps vlf-tune-encode-bps))))
+            (setq hexl-bps vlf-tune-hexl-bps
+                  insert-raw-bps vlf-tune-insert-raw-bps))))
     (when vlf-tune-enabled              ;merge back tune measurements
       (setq vlf-tune-insert-bps insert-bps
             vlf-tune-encode-bps encode-bps)
       (if is-hexl
-          (setq vlf-tune-insert-bps insert-bps
-                vlf-tune-encode-bps encode-bps)))))
+          (setq vlf-tune-hexl-bps hexl-bps
+                vlf-tune-insert-raw-bps insert-raw-bps)))))
 
 (defun vlf-occur (regexp)
   "Make whole file occur style index for REGEXP.
@@ -203,7 +202,7 @@ Prematurely ending indexing will still show what's found so far."
           (batch-size vlf-batch-size)
           (is-hexl (derived-mode-p 'hexl-mode)))
       (vlf-tune-batch (if (derived-mode-p 'hexl-mode)
-                          '(:hexl :dehexlify :insert :encode)
+                          '(:hexl :raw)
                         '(:insert :encode)))
       (vlf-with-undo-disabled
        (vlf-move-to-batch 0)
@@ -235,7 +234,7 @@ Prematurely ending indexing will still show what's found so far."
          (is-hexl (derived-mode-p 'hexl-mode))
          (end-of-file nil)
          (time (float-time))
-         (tune-types (if is-hexl '(:hexl :dehexlify :insert :encode)
+         (tune-types (if is-hexl '(:hexl :raw)
                        '(:insert :encode)))
          (reporter (make-progress-reporter
                     (concat "Building index for " regexp "...")

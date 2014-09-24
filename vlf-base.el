@@ -90,6 +90,9 @@ If same as current chunk is requested, do nothing.
 Return number of bytes moved back for proper decoding and number of
 bytes added to the end."
   (vlf-verify-size)
+  (if (derived-mode-p 'hexl-mode)
+      (setq start (- start (mod start hexl-bits))
+            end (+ end (- hexl-bits (mod end hexl-bits)))))
   (cond ((or (<= end start) (<= end 0)
              (<= vlf-file-size start))
          (when (or (not (buffer-modified-p))
@@ -133,6 +136,7 @@ bytes added to the end."
                      vlf-end-pos))
          (shifts
           (cond
+           ((and hexl (not modified)) (vlf-move-to-chunk-2 start end))
            ((or (< edit-end start) (< end vlf-start-pos)
                 (not (verify-visited-file-modtime (current-buffer))))
             (when (or (not modified)
@@ -233,20 +237,21 @@ bytes added to the end."
   (vlf-verify-size t)
   (setq vlf-start-pos (max 0 start)
         vlf-end-pos (min end vlf-file-size))
-  (let (shifts)
+  (let ((shifts '(0 . 0)))
     (let ((inhibit-read-only t)
           (pos (position-bytes (point))))
       (vlf-with-undo-disabled
-       (let ((hexl (derived-mode-p 'hexl-mode)))
-         (if hexl (hexl-mode-exit t))
-         (erase-buffer)
+       (erase-buffer)
+       (if (derived-mode-p 'hexl-mode)
+           (progn (vlf-tune-insert-file-contents-literally
+                   vlf-start-pos vlf-end-pos)
+                  (vlf-tune-hexlify))
          (setq shifts (vlf-insert-file-contents vlf-start-pos
                                                 vlf-end-pos t t)
                vlf-start-pos (- vlf-start-pos (car shifts))
-               vlf-end-pos (+ vlf-end-pos (cdr shifts)))
-         (if hexl (vlf-tune-hexlify)))
-       (goto-char (or (byte-to-position (+ pos (car shifts)))
-                      (point-max)))))
+               vlf-end-pos (+ vlf-end-pos (cdr shifts)))))
+      (goto-char (or (byte-to-position (+ pos (car shifts)))
+                     (point-max))))
     (set-buffer-modified-p nil)
     (or (eq buffer-undo-list t)
         (setq buffer-undo-list nil))
