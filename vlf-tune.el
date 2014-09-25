@@ -109,6 +109,9 @@ but don't change batch size.  If t, measure and change."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; profiling
 
+(declare-function hexl-line-displen "hexl")
+(declare-function dehexlify-buffer "hexl")
+
 (defun vlf-tune-initialize-measurement ()
   "Initialize measurement vector."
   (make-local-variable 'vlf-tune-max)
