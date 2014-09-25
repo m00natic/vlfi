@@ -30,10 +30,11 @@
 (require 'vlf)
 
 (defun vlf-re-search (regexp count backward batch-step
-                             &optional reporter time)
+                             &optional reporter time highlight)
   "Search for REGEXP COUNT number of times forward or BACKWARD.
 BATCH-STEP is amount of overlap between successive chunks.
 Use existing REPORTER and start TIME if given.
+Highlight match if HIGHLIGHT is non nil.
 Return t if search has been at least partially successful."
   (if (<= count 0)
       (error "Count must be positive"))
@@ -135,20 +136,22 @@ Return t if search has been at least partially successful."
               (if backward
                   (vlf-goto-match match-chunk-start match-chunk-end
                                   match-end-pos match-start-pos
-                                  count to-find time)
+                                  count to-find time highlight)
                 (vlf-goto-match match-chunk-start match-chunk-end
                                 match-start-pos match-end-pos
-                                count to-find time))))
+                                count to-find time highlight))))
          (run-hook-with-args 'vlf-after-batch-functions 'search)
          result)))))
 
 (defun vlf-goto-match (match-chunk-start match-chunk-end
                                          match-pos-start match-pos-end
-                                         count to-find time)
+                                         count to-find time
+                                         highlight)
   "Move to MATCH-CHUNK-START MATCH-CHUNK-END surrounding\
 MATCH-POS-START and MATCH-POS-END.
 According to COUNT and left TO-FIND, show if search has been
 successful.  Use start TIME to report how much it took.
+Highlight match if HIGHLIGHT is non nil.
 Return nil if nothing found."
   (if (= count to-find)
       (progn (vlf-move-to-chunk match-chunk-start match-chunk-end)
@@ -180,7 +183,9 @@ Return nil if nothing found."
         (goto-char (or (byte-to-position (- match-pos-start
                                             vlf-start-pos))
                        (point-max)))
-        (unwind-protect (sit-for 1)
+        (if highlight
+            (unwind-protect (sit-for 1)
+              (delete-overlay overlay))
           (delete-overlay overlay))
         t))))
 
@@ -193,7 +198,8 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                                           (car regexp-history)))
                          (or current-prefix-arg 1))))
   (let ((batch-size vlf-batch-size))
-    (or (vlf-re-search regexp count nil (min 1024 (/ vlf-batch-size 8)))
+    (or (vlf-re-search regexp count nil (min 1024 (/ vlf-batch-size 8))
+                       nil nil t)
         (setq vlf-batch-size batch-size))))
 
 (defun vlf-re-search-backward (regexp count)
@@ -205,7 +211,8 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                                           (car regexp-history)))
                          (or current-prefix-arg 1))))
   (let ((batch-size vlf-batch-size))
-    (or (vlf-re-search regexp count t (min 1024 (/ vlf-batch-size 8)))
+    (or (vlf-re-search regexp count t (min 1024 (/ vlf-batch-size 8))
+                       nil nil t)
         (setq vlf-batch-size batch-size))))
 
 (defun vlf-goto-line (n)
@@ -255,8 +262,11 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                    (vlf-tune-batch '(:insert :encode))
                    (vlf-move-to-chunk-2 start (+ start vlf-batch-size))
                    (goto-char (point-min))
-                   (setq success (vlf-re-search "[\n\C-m]" n nil 0
-                                                reporter time)))))
+                   (setq success
+                         (or (zerop n)
+                             (when (vlf-re-search "[\n\C-m]" n nil 0
+                                                  reporter time)
+                               (forward-char) t))))))
             (let ((start (max 0 (- vlf-file-size vlf-batch-size)))
                   (end vlf-file-size)
                   (reporter (make-progress-reporter
@@ -342,9 +352,8 @@ replace BACKWARD."
     (while (and match-found (if backward
                                 (not (zerop vlf-start-pos))
                               (< vlf-end-pos vlf-file-size)))
-      (setq match-found (if backward
-                            (vlf-re-search-backward regexp 1)
-                          (vlf-re-search-forward regexp 1)))
+      (setq match-found (vlf-re-search regexp 1 backward
+                                       (min 1024 (/ vlf-batch-size 8))))
       (when match-found
         (cond ((not automatic)
                (query-replace-regexp regexp to-string delimited

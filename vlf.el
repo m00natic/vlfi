@@ -60,7 +60,7 @@ values are: `write', `ediff', `occur', `search', `goto-line'."
   "Search backward for REGEXP prefix COUNT number of times." t)
 (autoload 'vlf-goto-line "vlf-search" "Go to line." t)
 (autoload 'vlf-query-replace "vlf-search"
-  "Replace some things after point matching REGEXP." t)
+  "Query replace regexp over whole file." t)
 (autoload 'vlf-occur "vlf-occur"
   "Make whole file occur style index for REGEXP." t)
 (autoload 'vlf-toggle-follow "vlf-follow"
