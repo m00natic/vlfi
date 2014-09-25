@@ -150,10 +150,11 @@ VEC is a vector of (mean time . count) elements ordered by size."
                               (- end start) (car result))
     (cdr result)))
 
-(defun vlf-tune-insert-file-contents-literally (start end)
-  "Insert raw file bytes START to END and save time it takes."
+(defun vlf-tune-insert-file-contents-literally (start end &optional file)
+  "Insert raw file bytes START to END and save time it takes.
+FILE if given is filename to be used, otherwise `buffer-file-name'."
   (let ((result (vlf-time (insert-file-contents-literally
-                           buffer-file-name nil start end))))
+                           (or file buffer-file-name) nil start end))))
     (vlf-tune-add-measurement vlf-tune-insert-raw-bps
                               (- end start) (car result))
     (cdr result)))
@@ -167,11 +168,13 @@ VEC is a vector of (mean time . count) elements ordered by size."
                               (cdr result) (car result))
     (cdr result)))
 
-(defun vlf-tune-write (start end append visit size)
+(defun vlf-tune-write (start end append visit size &optional file)
   "Save buffer and save time it takes.
 START, END, APPEND, VISIT have same meaning as in `write-region'.
-SIZE is number of bytes that are saved."
-  (let ((time (car (vlf-time (write-region start end buffer-file-name
+SIZE is number of bytes that are saved.
+FILE if given is filename to be used, otherwise `buffer-file-name'."
+  (let ((time (car (vlf-time (write-region start end
+                                           (or file buffer-file-name)
                                            append visit)))))
     (vlf-tune-add-measurement vlf-tune-write-bps size time)))
 

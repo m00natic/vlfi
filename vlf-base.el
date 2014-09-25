@@ -54,11 +54,13 @@
   "Get size in bytes of FILE."
   (or (nth 7 (file-attributes file)) 0))
 
-(defun vlf-verify-size (&optional update-visited-time)
+(defun vlf-verify-size (&optional update-visited-time file)
   "Update file size information if necessary and visited file time.
-If non-nil, UPDATE-VISITED-TIME."
+If non-nil, UPDATE-VISITED-TIME.
+FILE if given is filename to be used, otherwise `buffer-file-truename'."
   (unless (verify-visited-file-modtime (current-buffer))
-    (setq vlf-file-size (vlf-get-file-size buffer-file-truename))
+    (setq vlf-file-size (vlf-get-file-size (or file
+                                               buffer-file-truename)))
     (if update-visited-time
         (set-visited-file-modtime))))
 

@@ -65,10 +65,26 @@ If changing size of chunk, shift remaining file content."
                   (font-lock font-lock-mode))
               (font-lock-mode 0)
               (let ((batch-size vlf-batch-size)
-                    (time (float-time)))
-                (if (< 0 size-change)
-                    (vlf-file-shift-back size-change region-length)
-                  (vlf-file-shift-forward (- size-change) region-length))
+                    time)
+                (if (or (file-remote-p buffer-file-name)
+                        (y-or-n-p "File content needs be adjusted till\
+ end.  Use temporary copy of the whole file (slower but safer)? "))
+                    (let ((file-tmp (make-temp-file
+                                     (file-name-nondirectory
+                                      buffer-file-name))))
+                      (setq time (float-time))
+                      (copy-file buffer-file-name file-tmp t t t t)
+                      (if (< 0 size-change)
+                          (vlf-file-shift-back size-change region-length
+                                               file-tmp)
+                        (vlf-file-shift-forward (- size-change)
+                                                region-length file-tmp))
+                      (rename-file file-tmp buffer-file-name t))
+                  (setq time (float-time))
+                  (if (< 0 size-change)
+                      (vlf-file-shift-back size-change region-length)
+                    (vlf-file-shift-forward (- size-change)
+                                            region-length)))
                 (if font-lock (font-lock-mode 1))
                 (setq vlf-batch-size batch-size)
                 (vlf-move-to-chunk-2 vlf-start-pos
@@ -83,10 +99,11 @@ If changing size of chunk, shift remaining file content."
     (run-hook-with-args 'vlf-after-batch-functions 'write))
   t)
 
-(defun vlf-file-shift-back (size-change write-size)
+(defun vlf-file-shift-back (size-change write-size &optional file)
   "Shift file contents SIZE-CHANGE bytes back.
-WRITE-SIZE is byte length of saved chunk."
-  (vlf-tune-write nil nil vlf-start-pos t write-size)
+WRITE-SIZE is byte length of saved chunk.
+FILE if given is filename to be used, otherwise `buffer-file-name'."
+  (vlf-tune-write nil nil vlf-start-pos (if file nil t) write-size file)
   (let ((read-start-pos vlf-end-pos)
         (coding-system-for-write 'no-conversion)
         (reporter (make-progress-reporter "Adjusting file content..."
@@ -94,31 +111,34 @@ WRITE-SIZE is byte length of saved chunk."
                                           vlf-file-size)))
     (vlf-with-undo-disabled
      (while (vlf-shift-batch read-start-pos (- read-start-pos
-                                               size-change))
+                                               size-change)
+                             file)
        (setq read-start-pos (+ read-start-pos vlf-batch-size))
        (progress-reporter-update reporter read-start-pos))
      ;; pad end with space
      (erase-buffer)
-     (vlf-verify-size t)
+     (vlf-verify-size t file)
      (insert-char 32 size-change))
     (vlf-tune-write nil nil (- vlf-file-size size-change)
-                    t size-change)
+                    (if file nil t) size-change file)
     (progress-reporter-done reporter)))
 
-(defun vlf-shift-batch (read-pos write-pos)
+(defun vlf-shift-batch (read-pos write-pos file)
   "Read `vlf-batch-size' bytes from READ-POS and write them \
-back at WRITE-POS.  Return nil if EOF is reached, t otherwise."
+back at WRITE-POS using FILE.
+Return nil if EOF is reached, t otherwise."
   (erase-buffer)
-  (vlf-verify-size t)
-  (vlf-tune-batch '(:raw :write))
-  (let ((read-end (min (+ read-pos vlf-batch-size) vlf-file-size)))
-    (vlf-tune-insert-file-contents-literally read-pos read-end)
-    (vlf-tune-write nil nil write-pos 0 (- read-end read-pos))
+  (vlf-verify-size t file)
+  (vlf-tune-batch '(:raw :write)) ;insert speed over temp write file may defer wildly
+  (let ((read-end (min (+ read-pos vlf-batch-size) vlf-file-size))) ;compared to the original file
+    (vlf-tune-insert-file-contents-literally read-pos read-end file)
+    (vlf-tune-write nil nil write-pos 0 (- read-end read-pos) file)
     (< read-end vlf-file-size)))
 
-(defun vlf-file-shift-forward (size-change write-size)
+(defun vlf-file-shift-forward (size-change write-size &optional file)
   "Shift file contents SIZE-CHANGE bytes forward.
 WRITE-SIZE is byte length of saved chunk.
+FILE if given is filename to be used, otherwise `buffer-file-name'.
 Done by saving content up front and then writing previous batch."
   (vlf-tune-batch '(:raw :write))
   (let ((read-size (max vlf-batch-size size-change))
@@ -129,7 +149,7 @@ Done by saving content up front and then writing previous batch."
                                           vlf-file-size)))
     (vlf-with-undo-disabled
      (when (vlf-shift-batches read-size read-pos write-pos
-                              write-size t)
+                              write-size t file)
        (vlf-tune-batch '(:raw :write))
        (setq write-pos (+ read-pos size-change)
              read-pos (+ read-pos read-size)
@@ -138,7 +158,7 @@ Done by saving content up front and then writing previous batch."
        (progress-reporter-update reporter write-pos)
        (let ((coding-system-for-write 'no-conversion))
          (while (vlf-shift-batches read-size read-pos write-pos
-                                   write-size nil)
+                                   write-size nil file)
            (vlf-tune-batch '(:raw :write))
            (setq write-pos (+ read-pos size-change)
                  read-pos (+ read-pos read-size)
@@ -148,25 +168,27 @@ Done by saving content up front and then writing previous batch."
     (progress-reporter-done reporter)))
 
 (defun vlf-shift-batches (read-size read-pos write-pos write-size
-                                    hide-read)
+                                    hide-read file)
   "Append READ-SIZE bytes of file starting at READ-POS.
 Then write initial buffer content to file at WRITE-POS.
 WRITE-SIZE is byte length of saved chunk.
 If HIDE-READ is non nil, temporarily hide literal read content.
+FILE if given is filename to be used, otherwise `buffer-file-name'.
 Return nil if EOF is reached, t otherwise."
-  (vlf-verify-size t)
+  (vlf-verify-size t file)
   (let ((read-more (< read-pos vlf-file-size))
         (start-write-pos (point-min))
         (end-write-pos (point-max)))
     (when read-more
       (goto-char end-write-pos)
       (vlf-tune-insert-file-contents-literally
-       read-pos (min vlf-file-size (+ read-pos read-size))))
+       read-pos (min vlf-file-size (+ read-pos read-size)) file))
     ;; write
     (if hide-read ; hide literal region if user has to choose encoding
         (narrow-to-region start-write-pos end-write-pos))
     (vlf-tune-write start-write-pos end-write-pos write-pos
-                    (or (not read-more) 0) write-size)
+                    (or (and (not read-more) (not file)) 0)
+                    write-size file)
     (delete-region start-write-pos end-write-pos)
     (if hide-read (widen))
     read-more))
