@@ -64,15 +64,17 @@ Return t if search has been at least partially successful."
            (if backward
                (while (not (zerop to-find))
                  (cond ((re-search-backward regexp nil t)
-                        (setq to-find (1- to-find)
-                              match-chunk-start vlf-start-pos
-                              match-chunk-end vlf-end-pos
-                              match-start-pos (+ vlf-start-pos
-                                                 (position-bytes
-                                                  (match-beginning 0)))
-                              match-end-pos (+ vlf-start-pos
+                        (setq match-end-pos (+ vlf-start-pos
                                                (position-bytes
-                                                (match-end 0)))))
+                                                (match-end 0))))
+                        (if (/= match-start-pos match-end-pos)
+                            (setq to-find (1- to-find)
+                                  match-chunk-start vlf-start-pos
+                                  match-chunk-end vlf-end-pos
+                                  match-start-pos
+                                  (+ vlf-start-pos
+                                     (position-bytes
+                                      (match-beginning 0))))))
                        ((zerop vlf-start-pos)
                         (throw 'end-of-file nil))
                        (t (vlf-tune-batch tune-types)
@@ -97,15 +99,16 @@ Return t if search has been at least partially successful."
                                        vlf-start-pos)))))
              (while (not (zerop to-find))
                (cond ((re-search-forward regexp nil t)
-                      (setq to-find (1- to-find)
-                            match-chunk-start vlf-start-pos
-                            match-chunk-end vlf-end-pos
-                            match-start-pos (+ vlf-start-pos
+                      (setq match-start-pos (+ vlf-start-pos
                                                (position-bytes
-                                                (match-beginning 0)))
-                            match-end-pos (+ vlf-start-pos
-                                             (position-bytes
-                                              (match-end 0)))))
+                                                (match-beginning 0))))
+                      (if (/= match-start-pos match-end-pos)
+                          (setq to-find (1- to-find)
+                                match-chunk-start vlf-start-pos
+                                match-chunk-end vlf-end-pos
+                                match-end-pos (+ vlf-start-pos
+                                                 (position-bytes
+                                                  (match-end 0))))))
                      ((= vlf-end-pos vlf-file-size)
                       (throw 'end-of-file nil))
                      (t (vlf-tune-batch tune-types)
@@ -172,10 +175,12 @@ Return nil if nothing found."
         (overlay-put overlay 'face 'match)
         (if success
             (message "Match found (%f secs)" (- (float-time) time))
-          (goto-char match-end)
           (message "Moved to the %d match which is last (%f secs)"
                    (- count to-find) (- (float-time) time)))
-        (unwind-protect (sit-for 3)
+        (goto-char (or (byte-to-position (- match-pos-start
+                                            vlf-start-pos))
+                       (point-max)))
+        (unwind-protect (sit-for 1)
           (delete-overlay overlay))
         t))))
 
@@ -310,6 +315,49 @@ Assume `hexl-mode' is active."
       (vlf-move-to-batch hidden-bytes)
       (goto-char (point-min))
       (forward-line (- n 1 (/ hidden-bytes hexl-bits))))))
+
+(defun vlf-query-replace (regexp to-string &optional delimited backward)
+  "Query replace over whole file matching REGEXP with TO-STRING.
+Third arg DELIMITED (prefix arg if interactive), if non-nil, means replace
+only matches surrounded by word boundaries.  A negative prefix arg means
+replace BACKWARD."
+  (interactive
+   (let ((common (query-replace-read-args
+                  (concat "Query replace over whole file"
+                          (if current-prefix-arg
+                              (if (eq current-prefix-arg '-)
+                                  " backward"
+                                " word")
+                            "")
+                          " regexp")
+                  t)))
+     (list (nth 0 common) (nth 1 common) (nth 2 common) (nth 3 common))))
+  (query-replace-regexp regexp to-string delimited nil nil backward)
+  (if (buffer-modified-p)
+      (save-buffer))
+  (let ((match-found t)
+        (automatic (eq (lookup-key query-replace-map
+                                   (vector last-input-event))
+                       'automatic)))
+    (while (and match-found (if backward
+                                (not (zerop vlf-start-pos))
+                              (< vlf-end-pos vlf-file-size)))
+      (setq match-found (if backward
+                            (vlf-re-search-backward regexp 1)
+                          (vlf-re-search-forward regexp 1)))
+      (when match-found
+        (cond ((not automatic)
+               (query-replace-regexp regexp to-string delimited
+                                     nil nil backward)
+               (setq automatic (eq (lookup-key query-replace-map
+                                               (vector last-input-event))
+                                   'automatic)))
+              (backward (while (re-search-backward regexp nil t)
+                          (replace-match to-string)))
+              (t (while (re-search-forward regexp nil t)
+                   (replace-match to-string))))
+        (if (buffer-modified-p)
+            (save-buffer))))))
 
 (provide 'vlf-search)
 

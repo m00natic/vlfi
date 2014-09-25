@@ -59,6 +59,8 @@ values are: `write', `ediff', `occur', `search', `goto-line'."
 (autoload 'vlf-re-search-backward "vlf-search"
   "Search backward for REGEXP prefix COUNT number of times." t)
 (autoload 'vlf-goto-line "vlf-search" "Go to line." t)
+(autoload 'vlf-query-replace "vlf-search"
+  "Replace some things after point matching REGEXP." t)
 (autoload 'vlf-occur "vlf-occur"
   "Make whole file occur style index for REGEXP." t)
 (autoload 'vlf-toggle-follow "vlf-follow"
@@ -79,6 +81,7 @@ values are: `write', `ediff', `occur', `search', `goto-line'."
         (vlf-change-batch-size t)))
     (define-key map "s" 'vlf-re-search-forward)
     (define-key map "r" 'vlf-re-search-backward)
+    (define-key map "%" 'vlf-query-replace)
     (define-key map "o" 'vlf-occur)
     (define-key map "[" 'vlf-beginning-of-file)
     (define-key map "]" 'vlf-end-of-file)
