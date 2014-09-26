@@ -356,20 +356,21 @@ optimizing over TYPES up to MAX-IDX."
     (if none-missing
         (setq vlf-batch-size (* (1+ best-idx) vlf-tune-step)))))
 
-(defun vlf-tune-batch (types &optional linear)
+(defun vlf-tune-batch (types &optional linear file)
   "Adjust `vlf-batch-size' to optimal value optimizing on TYPES.
 TYPES is alist of elements that may be of form (type coef) or
 non list values in which case coeficient is assumed 1.
 Types can be :insert, :raw, :encode, :write, :hexl or :dehexlify.
 If LINEAR is non nil, use brute-force.  In case requested measurement
 is missing, stop search and set `vlf-batch-size' to this value.
+FILE if given is filename to be used, otherwise `buffer-file-name'.
 Suitable for multiple batch operations."
   (if (eq vlf-tune-enabled t)
       (let ((max-idx (1- (/ (min vlf-tune-max
                                  (/ (1+ vlf-file-size) 2))
                             vlf-tune-step))))
         (cond (linear (vlf-tune-linear types max-idx))
-              ((file-remote-p buffer-file-name)
+              ((file-remote-p (or file buffer-file-name))
                (vlf-tune-conservative types))
               ((<= 1 max-idx)
                (if (< max-idx 3)
