@@ -10,22 +10,22 @@ without swapping and degraded performance.
 This is development version of the GNU ELPA [[http://elpa.gnu.org/packages/vlf][VLF]] package.  Here's what
 it offers in a nutshell:
 
-- regular expression search on whole file (in constant memory
-  determined by current batch size)
+- automatic adjustment of batch size for optimal performance and
+  responsiveness
+- regular expression search and replace over whole file
+- [[http://www.emacswiki.org/emacs/OccurMode][Occur]] like indexing
+- by batch [[http://www.emacswiki.org/emacs/EdiffMode][Ediff]] comparison
+- automatic scrolling of batches
 - chunk editing (save is immediate if size hasn't changed, done in
   constant memory determined by current batch size otherwise)
-- [[http://www.emacswiki.org/emacs/OccurMode][Occur]] like indexing
 - options to jump to beginning, end or arbitrary file chunk
+- smooth integration with [[http://www.emacswiki.org/emacs/HexlMode][hexl-mode]]
+- works with [[http://www.emacswiki.org/emacs/TrampMode][TRAMP]] so accessing network files is fine and quick
 - newly added content is acknowledged if file has changed size
   meanwhile
-- automatic scrolling of batches
-- automatic adjustment of batch size for optimal performance
 - as it's a minor mode, font locking and functionality of the
-  respective major mode is also present
-- by batch [[http://www.emacswiki.org/emacs/EdiffMode][Ediff]] comparison
+  respective major mode and other minor modes is also present
 - can be added as option to automatically open large files
-- smooth integration with [[http://www.emacswiki.org/emacs/HexlMode][hexl-mode]]
-- works with [[http://www.emacswiki.org/emacs/TrampMode][TRAMP]] so accessing network files is fine
 
 GNU Emacs 23 and 24 are supported.
 
@@ -143,10 +143,11 @@ the end.
 Continuous chunk recenter around point in current buffer can be
 toggled with *C-c C-v f*.
 
-** Search whole file
+** Search and/or replace whole file
 
 *C-c C-v s* and *C-c C-v r* search forward and backward respectively
-over the whole file, batch by batch.
+over the whole file, batch by batch.  *C-c C-v %* does search and
+query replace saving intermediate changes.
 
 ** Occur over whole file
 
@@ -168,6 +169,8 @@ lines are counted from the end of file.
 
 If editing doesn't change size of the chunk, only this chunk is saved.
 Otherwise the remaining part of the file is adjusted batch by batch.
+*vlf-save-in-place* customization option controls if temporary file
+should be used in such case.
 
 ** By batch Ediff
 
@@ -178,7 +181,7 @@ last difference in current chunk searches for following one with
 difference.  The other way around if looking for difference before the
 first one.
 
-* Extending
+* Extend
 
 ** Move hooks
 
