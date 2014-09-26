@@ -328,45 +328,36 @@ Assume `hexl-mode' is active."
 
 (defun vlf-query-replace (regexp to-string &optional delimited backward)
   "Query replace over whole file matching REGEXP with TO-STRING.
-Third arg DELIMITED (prefix arg if interactive), if non-nil, means replace
+Third arg DELIMITED (prefix arg if interactive), if non-nil, replace
 only matches surrounded by word boundaries.  A negative prefix arg means
 replace BACKWARD."
-  (interactive
-   (let ((common (query-replace-read-args
-                  (concat "Query replace over whole file"
-                          (if current-prefix-arg
-                              (if (eq current-prefix-arg '-)
-                                  " backward"
-                                " word")
-                            "")
-                          " regexp")
-                  t)))
-     (list (nth 0 common) (nth 1 common) (nth 2 common) (nth 3 common))))
-  (query-replace-regexp regexp to-string delimited nil nil backward)
-  (if (buffer-modified-p)
-      (save-buffer))
-  (let ((match-found t)
-        (automatic (eq (lookup-key query-replace-map
-                                   (vector last-input-event))
-                       'automatic)))
-    (while (and match-found (if backward
-                                (not (zerop vlf-start-pos))
-                              (< vlf-end-pos vlf-file-size)))
-      (setq match-found (vlf-re-search regexp 1 backward
-                                       (min 1024 (/ vlf-batch-size 8))))
-      (when match-found
-        (cond ((not automatic)
-               (query-replace-regexp regexp to-string delimited
-                                     nil nil backward)
-               (setq automatic (eq (lookup-key query-replace-map
-                                               (vector last-input-event))
-                                   'automatic)))
-              (backward (while (re-search-backward regexp nil t)
-                          (replace-match to-string)))
-              (t (while (re-search-forward regexp nil t)
-                   (replace-match to-string))))
-        (if (buffer-modified-p)
-            (save-buffer))))))
+  (interactive (let ((common (query-replace-read-args
+                              (concat "Query replace over whole file"
+                                      (if current-prefix-arg
+                                          (if (eq current-prefix-arg '-)
+                                              " backward"
+                                            " word")
+                                        "")
+                                      " regexp")
+                              t)))
+                 (list (nth 0 common) (nth 1 common) (nth 2 common)
+                       (nth 3 common))))
+  (let ((not-automatic t))
+    (while (vlf-re-search regexp 1 backward
+                          (min 1024 (/ vlf-batch-size 8)))
+      (cond (not-automatic
+             (query-replace-regexp regexp to-string delimited
+                                   nil nil backward)
+             (setq not-automatic
+                   (not (eq (lookup-key query-replace-map
+                                        (vector last-input-event))
+                            'automatic))))
+            (backward (while (re-search-backward regexp nil t)
+                        (replace-match to-string)))
+            (t (while (re-search-forward regexp nil t)
+                 (replace-match to-string))))
+      (if (buffer-modified-p)
+          (save-buffer)))))
 
 (provide 'vlf-search)
 

@@ -382,7 +382,7 @@ Suitable for multiple batch operations."
 Best considered where primitive operations total is closest to
 `vlf-tune-load-time'.  If MIN-IDX and MAX-IDX are given,
 confine search to this region."
-  (if vlf-tune-enabled
+  (if (eq vlf-tune-enabled t)
       (progn
         (setq min-idx (max 0 (or min-idx 0))
               max-idx (min (or max-idx vlf-tune-max)
