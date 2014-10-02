@@ -63,7 +63,7 @@ but don't change batch size.  If t, measure and change."
   "Maximum batch size in bytes when auto tuning."
   :group 'vlf :type 'integer)
 
-(defcustom vlf-tune-step (/ vlf-tune-max 1000)
+(defcustom vlf-tune-step (/ vlf-tune-max 10000)
   "Step used for tuning in bytes."
   :group 'vlf :type 'integer)
 
@@ -339,22 +339,18 @@ MIN and MAX specify interval of indexes to search."
           (setq vlf-batch-size (* (1+ left-idx) vlf-tune-step)))))))
 
 (defun vlf-tune-linear (types max-idx)
-  "Adjust `vlf-batch-size' to optimal value using linear search,\
-optimizing over TYPES up to MAX-IDX."
+  "Adjust `vlf-batch-size' to optimal known value using linear search.
+Optimize over TYPES up to MAX-IDX."
   (let ((best-idx 0)
         (best-bps 0)
-        (idx 0)
-        (none-missing t))
-    (while (and none-missing (< idx max-idx))
+        (idx 0))
+    (while (< idx max-idx)
       (let ((bps (vlf-tune-score types idx)))
-        (cond ((null bps)
-               (setq vlf-batch-size (* (1+ idx) vlf-tune-step)
-                     none-missing nil))
-              ((< best-bps bps) (setq best-idx idx
-                                      best-bps bps))))
+        (and bps (< best-bps bps)
+             (setq best-idx idx
+                   best-bps bps)))
       (setq idx (1+ idx)))
-    (if none-missing
-        (setq vlf-batch-size (* (1+ best-idx) vlf-tune-step)))))
+    (setq vlf-batch-size (* (1+ best-idx) vlf-tune-step))))
 
 (defun vlf-tune-batch (types &optional linear file)
   "Adjust `vlf-batch-size' to optimal value optimizing on TYPES.

@@ -149,6 +149,7 @@ EVENT may hold details of the invocation."
 Prematurely ending indexing will still show what's found so far."
   (let ((vlf-buffer (current-buffer))
         (file buffer-file-name)
+        (file-size vlf-file-size)
         (batch-size vlf-batch-size)
         (is-hexl (derived-mode-p 'hexl-mode))
         (insert-bps vlf-tune-insert-bps)
@@ -158,7 +159,8 @@ Prematurely ending indexing will still show what's found so far."
     (with-temp-buffer
       (setq buffer-file-name file
             buffer-file-truename file
-            buffer-undo-list t)
+            buffer-undo-list t
+            vlf-file-size file-size)
       (set-buffer-modified-p nil)
       (set (make-local-variable 'vlf-batch-size) batch-size)
       (when vlf-tune-enabled
@@ -167,8 +169,8 @@ Prematurely ending indexing will still show what's found so far."
         (if is-hexl
             (progn (setq vlf-tune-hexl-bps hexl-bps
                          vlf-tune-insert-raw-bps insert-raw-bps)
-                   (vlf-tune-batch '(:hexl :raw)))
-          (vlf-tune-batch '(:insert :encode))))
+                   (vlf-tune-batch '(:hexl :raw) t))
+          (vlf-tune-batch '(:insert :encode) t)))
       (vlf-mode 1)
       (if is-hexl (hexl-mode))
       (goto-char (point-min))
@@ -203,7 +205,7 @@ Prematurely ending indexing will still show what's found so far."
           (is-hexl (derived-mode-p 'hexl-mode)))
       (vlf-tune-batch (if (derived-mode-p 'hexl-mode)
                           '(:hexl :raw)
-                        '(:insert :encode)))
+                        '(:insert :encode)) t)
       (vlf-with-undo-disabled
        (vlf-move-to-batch 0)
        (goto-char (point-min))
