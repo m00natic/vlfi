@@ -55,6 +55,7 @@ If changing size of chunk, shift remaining file content."
           (progn (vlf-tune-write nil nil vlf-start-pos t
                                  (vlf-tune-encode-length (point-min)
                                                          (point-max)))
+                 (if hexl (vlf-tune-hexlify))
                  (setq vlf-file-size (vlf-get-file-size
                                       buffer-file-truename)
                        vlf-end-pos vlf-file-size)
@@ -64,8 +65,9 @@ If changing size of chunk, shift remaining file content."
                (size-change (- vlf-end-pos vlf-start-pos
                                region-length)))
           (if (zerop size-change)
-              (vlf-tune-write nil nil vlf-start-pos t
-                              (- vlf-end-pos vlf-start-pos))
+              (progn (vlf-tune-write nil nil vlf-start-pos t
+                                     (- vlf-end-pos vlf-start-pos))
+                     (if hexl (vlf-tune-hexlify)))
             (let ((pos (point))
                   (font-lock font-lock-mode)
                   (batch-size vlf-batch-size)
@@ -76,9 +78,7 @@ If changing size of chunk, shift remaining file content."
                           (y-or-n-p "File content needs be adjusted\
  till end.  Use temporary copy of the whole file (slower but safer)? ")
                         (not vlf-save-in-place)))
-                  (let ((file-tmp (make-temp-file
-                                   (file-name-nondirectory
-                                    buffer-file-name))))
+                  (let ((file-tmp (make-temp-file "vlf")))
                     (setq time (float-time))
                     (copy-file buffer-file-name file-tmp t t t t)
                     (if (< 0 size-change)
@@ -101,8 +101,7 @@ If changing size of chunk, shift remaining file content."
                                      vlf-end-pos))
               (vlf-update-buffer-name)
               (goto-char pos)
-              (message "Save took %f seconds" (- (float-time) time))))))
-      (if hexl (vlf-tune-hexlify)))
+              (message "Save took %f seconds" (- (float-time) time)))))))
     (run-hook-with-args 'vlf-after-batch-functions 'write))
   t)
 

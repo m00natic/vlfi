@@ -135,7 +135,6 @@ Return t if search has been at least partially successful."
                                                   vlf-end-pos)))))
            (progress-reporter-done reporter))
        (set-buffer-modified-p nil)
-       (if is-hexl (vlf-tune-hexlify))
        (if font-lock (font-lock-mode 1))
        (let ((result
               (if backward
@@ -202,10 +201,13 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                                       (if regexp-history
                                           (car regexp-history)))
                          (or current-prefix-arg 1))))
-  (let ((batch-size vlf-batch-size))
-    (or (vlf-re-search regexp count nil (min 1024 (/ vlf-batch-size 8))
-                       nil nil t)
-        (setq vlf-batch-size batch-size))))
+  (let ((batch-size vlf-batch-size)
+        success)
+    (unwind-protect
+        (setq success (vlf-re-search regexp count nil
+                                     (min 1024 (/ vlf-batch-size 8))
+                                     nil nil t))
+      (or success (setq vlf-batch-size batch-size)))))
 
 (defun vlf-re-search-backward (regexp count)
   "Search backward for REGEXP prefix COUNT number of times.
@@ -215,10 +217,13 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                                       (if regexp-history
                                           (car regexp-history)))
                          (or current-prefix-arg 1))))
-  (let ((batch-size vlf-batch-size))
-    (or (vlf-re-search regexp count t (min 1024 (/ vlf-batch-size 8))
-                       nil nil t)
-        (setq vlf-batch-size batch-size))))
+  (let ((batch-size vlf-batch-size)
+        success)
+    (unwind-protect
+        (setq success (vlf-re-search regexp count t
+                                     (min 1024 (/ vlf-batch-size 8))
+                                     nil nil t))
+      (or success (setq vlf-batch-size batch-size)))))
 
 (defun vlf-goto-line (n)
   "Go to line N.  If N is negative, count from the end of file."
