@@ -294,12 +294,13 @@ Prematurely ending indexing will still show what's found so far."
               (setq end-of-file (= vlf-end-pos vlf-file-size))
               (unless end-of-file
                 (vlf-tune-batch tune-types)
-                (let ((batch-move (- vlf-end-pos batch-step)))
-                  (vlf-move-to-batch (if (or is-hexl
-                                             (< match-end-pos
-                                                batch-move))
-                                         batch-move
-                                       match-end-pos) t))
+                (let* ((batch-move (- vlf-end-pos batch-step))
+                       (start (if (or is-hexl (< match-end-pos
+                                                 batch-move))
+                                  batch-move
+                                match-end-pos)))
+                  (vlf-move-to-chunk start (+ start
+                                              vlf-batch-size) t))
                 (goto-char (if (or is-hexl
                                    (<= match-end-pos vlf-start-pos))
                                (point-min)

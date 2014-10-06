@@ -116,7 +116,7 @@ but don't change batch size.  If t, measure and change."
   "Initialize measurement vector."
   (make-local-variable 'vlf-tune-max)
   (make-local-variable 'vlf-tune-step)
-  (make-vector (/ vlf-tune-max vlf-tune-step) nil))
+  (make-vector (1- (/ vlf-tune-max vlf-tune-step)) nil))
 
 (defmacro vlf-tune-add-measurement (vec size time)
   "Add at an appropriate position in VEC new SIZE TIME measurement.
@@ -345,7 +345,7 @@ Optimize over TYPES up to MAX-IDX."
         (best-bps 0)
         (idx 0))
     (while (< idx max-idx)
-      (let ((bps (vlf-tune-score types idx)))
+      (let ((bps (vlf-tune-score types idx t)))
         (and bps (< best-bps bps)
              (setq best-idx idx
                    best-bps bps)))

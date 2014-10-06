@@ -79,14 +79,15 @@ Return t if search has been at least partially successful."
                        ((zerop vlf-start-pos)
                         (throw 'end-of-file nil))
                        (t (vlf-tune-batch tune-types)
-                          (let ((batch-move (- vlf-start-pos
-                                               (- vlf-batch-size
-                                                  batch-step))))
-                            (vlf-move-to-batch
-                             (if (or is-hexl
-                                     (<= batch-move match-start-pos))
-                                 batch-move
-                               (- match-start-pos vlf-batch-size)) t))
+                          (let* ((batch-move (+ vlf-start-pos
+                                                batch-step))
+                                 (end (if (or is-hexl
+                                              (<= batch-move
+                                                  match-start-pos))
+                                          batch-move
+                                        match-start-pos)))
+                            (vlf-move-to-chunk (- end vlf-batch-size)
+                                               end t))
                           (goto-char (if (or is-hexl
                                              (<= vlf-end-pos
                                                  match-start-pos))
@@ -110,17 +111,21 @@ Return t if search has been at least partially successful."
                                 match-end-pos (+ vlf-start-pos
                                                  (position-bytes
                                                   (match-end 0))))))
-                     ((= vlf-end-pos vlf-file-size)
+                     ((>= vlf-end-pos vlf-file-size)
                       (throw 'end-of-file nil))
                      (t (vlf-tune-batch tune-types)
-                        (let ((batch-move (- vlf-end-pos batch-step)))
-                          (vlf-move-to-batch
-                           (if (or is-hexl
-                                   (< match-end-pos batch-move))
-                               batch-move
-                             match-end-pos) t))
+                        (let* ((batch-move (- vlf-end-pos batch-step))
+                               (start (if (or is-hexl
+                                              (< match-end-pos
+                                                 batch-move))
+                                          batch-move
+                                        match-end-pos)))
+                          (vlf-move-to-chunk start
+                                             (+ start vlf-batch-size)
+                                             t))
                         (goto-char (if (or is-hexl
-                                           (<= match-end-pos vlf-start-pos))
+                                           (<= match-end-pos
+                                               vlf-start-pos))
                                        (point-min)
                                      (or (byte-to-position
                                           (- match-end-pos
