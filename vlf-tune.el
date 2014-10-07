@@ -365,13 +365,17 @@ Suitable for multiple batch operations."
       (let ((max-idx (1- (/ (min vlf-tune-max
                                  (/ (1+ vlf-file-size) 2))
                             vlf-tune-step))))
-        (cond (linear (vlf-tune-linear types max-idx))
-              ((file-remote-p (or file buffer-file-name))
-               (vlf-tune-conservative types))
-              ((<= 1 max-idx)
-               (if (< max-idx 3)
-                   (vlf-tune-conservative types (/ max-idx 2))
-                 (vlf-tune-binary types 0 max-idx)))))))
+        (if linear
+            (vlf-tune-linear types max-idx)
+          (let ((batch-size vlf-batch-size))
+            (cond ((file-remote-p (or file buffer-file-name))
+                   (vlf-tune-conservative types))
+                  ((<= 1 max-idx)
+                   (if (< max-idx 3)
+                       (vlf-tune-conservative types (/ max-idx 2))
+                     (vlf-tune-binary types 0 max-idx))))
+            (if (= batch-size vlf-batch-size) ;local maxima?
+                (vlf-tune-linear types max-idx)))))))
 
 (defun vlf-tune-optimal-load (types &optional min-idx max-idx)
   "Get best batch size according to existing measurements over TYPES.
