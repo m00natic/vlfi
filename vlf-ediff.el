@@ -169,7 +169,7 @@ logical chunks in case there is no difference at the current ones."
           min-file-size (min min-file-size vlf-file-size)
           is-hexl (or is-hexl (derived-mode-p 'hexl-mode)))
     (let ((tramp-verbose (if (boundp 'tramp-verbose)
-                             (min tramp-verbose 2)))
+                             (min tramp-verbose 1)))
           (end-B (= vlf-start-pos vlf-end-pos))
           (chunk-B (cons vlf-start-pos vlf-end-pos))
           (font-lock-B font-lock-mode)

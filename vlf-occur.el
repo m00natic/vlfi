@@ -217,7 +217,7 @@ Prematurely ending indexing will still show what's found so far."
 (defun vlf-build-occur (regexp vlf-buffer)
   "Build occur style index for REGEXP over VLF-BUFFER."
   (let* ((tramp-verbose (if (boundp 'tramp-verbose)
-                            (min tramp-verbose 2)))
+                            (min tramp-verbose 1)))
          (case-fold-search t)
          (line 1)
          (last-match-line 0)
