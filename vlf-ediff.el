@@ -217,9 +217,9 @@ logical chunks in case there is no difference at the current ones."
                     (vlf-move-to-chunk (- max-file-size
                                           vlf-batch-size)
                                        max-file-size))
-                (vlf-beginning-of-file)
+                (vlf-move-to-batch 0)
                 (set-buffer buffer-A)
-                (vlf-beginning-of-file))
+                (vlf-move-to-batch 0))
               (set-buffer ediff-buffer)
               (ediff-update-diffs)
               (or is-hexl
