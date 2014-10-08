@@ -60,11 +60,13 @@ but don't change batch size.  If t, measure and change."
                           (if ram-size
                               (/ ram-size 20)
                             large-file-warning-threshold))
-  "Maximum batch size in bytes when auto tuning."
+  "Maximum batch size in bytes when auto tuning.
+Avoid increasing this after opening file with VLF."
   :group 'vlf :type 'integer)
 
 (defcustom vlf-tune-step (/ vlf-tune-max 10000)
-  "Step used for tuning in bytes."
+  "Step used for tuning in bytes.
+Avoid decreasing this after opening file with VLF."
   :group 'vlf :type 'integer)
 
 (defcustom vlf-tune-load-time 1.0
@@ -83,23 +85,15 @@ but don't change batch size.  If t, measure and change."
 
 (defvar vlf-tune-encode-bps nil
   "Vector of bytes per second encode measurements.")
-(make-variable-buffer-local 'vlf-tune-encode-bps)
-(put 'vlf-tune-encode-bps 'permanent-local t)
 
 (defvar vlf-tune-write-bps nil
   "Vector of bytes per second write measurements.")
-(make-variable-buffer-local 'vlf-tune-write-bps)
-(put 'vlf-tune-write-bps 'permanent-local t)
 
 (defvar vlf-tune-hexl-bps nil
   "Vector of bytes per second hexlify measurements.")
-(make-variable-buffer-local 'vlf-tune-hexl-bps)
-(put 'vlf-tune-hexl-bps 'permanent-local t)
 
 (defvar vlf-tune-dehexlify-bps nil
   "Vector of bytes per second dehexlify measurements.")
-(make-variable-buffer-local 'vlf-tune-dehexlify-bps)
-(put 'vlf-tune-dehexlify-bps 'permanent-local t)
 
 (defun vlf-tune-closest-index (size)
   "Get closest measurement index corresponding to SIZE."
@@ -114,8 +108,6 @@ but don't change batch size.  If t, measure and change."
 
 (defun vlf-tune-initialize-measurement ()
   "Initialize measurement vector."
-  (make-local-variable 'vlf-tune-max)
-  (make-local-variable 'vlf-tune-step)
   (make-vector (1- (/ vlf-tune-max vlf-tune-step)) nil))
 
 (defmacro vlf-tune-add-measurement (vec size time)
@@ -168,15 +160,16 @@ FILE if given is filename to be used, otherwise `buffer-file-name'."
                               (cdr result) (car result))
     (cdr result)))
 
-(defun vlf-tune-write (start end append visit size &optional file)
+(defun vlf-tune-write (start end append visit size &optional file-name)
   "Save buffer and save time it takes.
 START, END, APPEND, VISIT have same meaning as in `write-region'.
 SIZE is number of bytes that are saved.
-FILE if given is filename to be used, otherwise `buffer-file-name'."
-  (let ((time (car (vlf-time (write-region start end
-                                           (or file buffer-file-name)
-                                           append visit)))))
-    (vlf-tune-add-measurement vlf-tune-write-bps size time)))
+FILE-NAME if given is to be used instead of `buffer-file-name'."
+  (let* ((file (or file-name buffer-file-name))
+         (time (car (vlf-time (write-region start end file append
+                                            visit)))))
+    (or (file-remote-p file) ;writing to remote files can include network copying
+        (vlf-tune-add-measurement vlf-tune-write-bps size time))))
 
 (defun vlf-tune-hexlify ()
   "Activate `hexl-mode' and save time it takes."

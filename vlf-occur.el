@@ -153,8 +153,6 @@ Prematurely ending indexing will still show what's found so far."
         (batch-size vlf-batch-size)
         (is-hexl (derived-mode-p 'hexl-mode))
         (insert-bps vlf-tune-insert-bps)
-        (encode-bps vlf-tune-encode-bps)
-        (hexl-bps vlf-tune-hexl-bps)
         (insert-raw-bps vlf-tune-insert-raw-bps))
     (with-temp-buffer
       (setq buffer-file-name file
@@ -164,11 +162,9 @@ Prematurely ending indexing will still show what's found so far."
       (set-buffer-modified-p nil)
       (set (make-local-variable 'vlf-batch-size) batch-size)
       (when vlf-tune-enabled
-        (setq vlf-tune-insert-bps insert-bps
-              vlf-tune-encode-bps encode-bps)
+        (setq vlf-tune-insert-bps insert-bps)
         (if is-hexl
-            (progn (setq vlf-tune-hexl-bps hexl-bps
-                         vlf-tune-insert-raw-bps insert-raw-bps)
+            (progn (setq vlf-tune-insert-raw-bps insert-raw-bps)
                    (vlf-tune-batch '(:hexl :raw) t))
           (vlf-tune-batch '(:insert :encode) t)))
       (vlf-mode 1)
@@ -176,17 +172,13 @@ Prematurely ending indexing will still show what's found so far."
       (goto-char (point-min))
       (vlf-build-occur regexp vlf-buffer)
       (when vlf-tune-enabled
-        (setq insert-bps vlf-tune-insert-bps
-              encode-bps vlf-tune-encode-bps)
+        (setq insert-bps vlf-tune-insert-bps)
         (if is-hexl
-            (setq hexl-bps vlf-tune-hexl-bps
-                  insert-raw-bps vlf-tune-insert-raw-bps))))
+            (setq insert-raw-bps vlf-tune-insert-raw-bps))))
     (when vlf-tune-enabled              ;merge back tune measurements
-      (setq vlf-tune-insert-bps insert-bps
-            vlf-tune-encode-bps encode-bps)
+      (setq vlf-tune-insert-bps insert-bps)
       (if is-hexl
-          (setq vlf-tune-hexl-bps hexl-bps
-                vlf-tune-insert-raw-bps insert-raw-bps)))))
+          (setq vlf-tune-insert-raw-bps insert-raw-bps)))))
 
 (defun vlf-occur (regexp)
   "Make whole file occur style index for REGEXP.
