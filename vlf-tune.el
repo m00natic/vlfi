@@ -171,13 +171,27 @@ FILE-NAME if given is to be used instead of `buffer-file-name'."
     (or (file-remote-p file) ;writing to remote files can include network copying
         (vlf-tune-add-measurement vlf-tune-write-bps size time))))
 
+(defun vlf-hexl-adjust-addresses ()
+  "Adjust hexl address indicators according to `vlf-start-pos'."
+  (let ((pos (point))
+        (address vlf-start-pos))
+    (goto-char (point-min))
+    (while (re-search-forward "^[0-9a-f]+" nil t)
+      (replace-match (format "%08x" address))
+      (setq address (+ address hexl-bits)))
+    (goto-char pos)))
+
 (defun vlf-tune-hexlify ()
   "Activate `hexl-mode' and save time it takes."
-  (let ((time (car (vlf-time (hexlify-buffer)))))
+  (let* ((no-adjust (zerop vlf-start-pos))
+         (time (car (vlf-time (hexlify-buffer)
+                              (or no-adjust
+                                  (vlf-hexl-adjust-addresses))))))
     (setq hexl-max-address (+ (* (/ (1- (buffer-size))
                                     (hexl-line-displen)) 16) 15))
-    (vlf-tune-add-measurement vlf-tune-hexl-bps
-                              hexl-max-address time)))
+    (or no-adjust
+        (vlf-tune-add-measurement vlf-tune-hexl-bps
+                                  hexl-max-address time))))
 
 (defun vlf-tune-dehexlify ()
   "Exit `hexl-mode' and save time it takes."
