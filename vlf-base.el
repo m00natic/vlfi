@@ -47,6 +47,8 @@
 (make-variable-buffer-local 'vlf-end-pos)
 (put 'vlf-end-pos 'permanent-local t)
 
+(defvar hexl-bits)
+
 (defconst vlf-sample-size 24
   "Minimal number of bytes that can be properly decoded.")
 

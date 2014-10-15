@@ -53,6 +53,8 @@ One argument is supplied that specifies current action.  Possible
 values are: `write', `ediff', `occur', `search', `goto-line'."
   :group 'vlf :type 'hook)
 
+(defvar hexl-bits)
+
 (autoload 'vlf-write "vlf-write" "Write current chunk to file." t)
 (autoload 'vlf-re-search-forward "vlf-search"
   "Search forward for REGEXP prefix COUNT number of times." t)

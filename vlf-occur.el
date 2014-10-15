@@ -44,6 +44,8 @@
 (defvar vlf-occur-lines 0 "Number of lines scanned by `vlf-occur'.")
 (make-variable-buffer-local 'vlf-occur-lines)
 
+(defvar tramp-verbose)
+
 (defvar vlf-occur-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "n" 'vlf-occur-next-match)

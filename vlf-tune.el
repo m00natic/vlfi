@@ -95,6 +95,11 @@ Avoid decreasing this after opening file with VLF."
 (defvar vlf-tune-dehexlify-bps nil
   "Vector of bytes per second dehexlify measurements.")
 
+(defvar hexl-bits)
+(defvar hexl-max-address)
+(declare-function hexl-line-displen "hexl")
+(declare-function dehexlify-buffer "hexl")
+
 (defun vlf-tune-closest-index (size)
   "Get closest measurement index corresponding to SIZE."
   (let ((step (float vlf-tune-step)))
@@ -102,9 +107,6 @@ Avoid decreasing this after opening file with VLF."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; profiling
-
-(declare-function hexl-line-displen "hexl")
-(declare-function dehexlify-buffer "hexl")
 
 (defun vlf-tune-initialize-measurement ()
   "Initialize measurement vector."

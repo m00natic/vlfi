@@ -34,6 +34,8 @@
   "If non nil, specifies that ediff is done over VLF buffers.")
 (make-variable-buffer-local 'vlf-ediff-session)
 
+(defvar tramp-verbose)
+
 (defun vlf-ediff-buffers (buffer-A buffer-B)
   "Run batch by batch ediff over VLF buffers BUFFER-A and BUFFER-B.
 Batch size is determined by the size in BUFFER-A.

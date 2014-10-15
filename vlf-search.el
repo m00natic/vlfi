@@ -29,6 +29,9 @@
 
 (require 'vlf)
 
+(defvar hexl-bits)
+(defvar tramp-verbose)
+
 (defun vlf-re-search (regexp count backward batch-step
                              &optional reporter time highlight)
   "Search for REGEXP COUNT number of times forward or BACKWARD.
