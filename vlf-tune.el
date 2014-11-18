@@ -56,10 +56,11 @@ but don't change batch size.  If t, measure and change."
             (* 1000 (string-to-number (substring free match-from
                                                  (match-end 0))))))))
 
-(defcustom vlf-tune-max (let ((ram-size (vlf-tune-ram-size)))
-                          (if ram-size
-                              (/ ram-size 20)
-                            large-file-warning-threshold))
+(defcustom vlf-tune-max (max (let ((ram-size (vlf-tune-ram-size)))
+                               (if ram-size
+                                   (/ ram-size 20)
+                                 0))
+                             large-file-warning-threshold)
   "Maximum batch size in bytes when auto tuning.
 Avoid increasing this after opening file with VLF."
   :group 'vlf :type 'integer)
