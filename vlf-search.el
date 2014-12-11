@@ -90,7 +90,7 @@ Return t if search has been at least partially successful."
                                           batch-move
                                         match-start-pos)))
                             (vlf-move-to-chunk (- end vlf-batch-size)
-                                               end t))
+                                               end))
                           (goto-char (if (or is-hexl
                                              (<= vlf-end-pos
                                                  match-start-pos))
@@ -124,8 +124,7 @@ Return t if search has been at least partially successful."
                                           batch-move
                                         match-end-pos)))
                           (vlf-move-to-chunk start
-                                             (+ start vlf-batch-size)
-                                             t))
+                                             (+ start vlf-batch-size)))
                         (goto-char (if (or is-hexl
                                            (<= match-end-pos
                                                vlf-start-pos))
@@ -168,9 +167,8 @@ Return nil if nothing found."
              (message "Not found (%f secs)" (- (float-time) time))
              nil)
     (let ((success (zerop to-find)))
-      (if success
-          (vlf-update-buffer-name)
-        (vlf-move-to-chunk match-chunk-start match-chunk-end))
+      (or success
+          (vlf-move-to-chunk match-chunk-start match-chunk-end))
       (setq vlf-batch-size (vlf-tune-optimal-load
                             (if (derived-mode-p 'hexl-mode)
                                 '(:hexl :raw)
@@ -310,7 +308,6 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
         (unless success
           (vlf-with-undo-disabled
            (vlf-move-to-chunk-2 start-pos end-pos))
-          (vlf-update-buffer-name)
           (goto-char pos)
           (setq vlf-batch-size batch-size)
           (message "Unable to find line"))

@@ -71,15 +71,6 @@ FILE if given is filename to be used, otherwise `buffer-file-truename'."
     "Print FILE-SIZE in MB."
     (format "%.3fMB" (/ file-size 1048576.0))))
 
-(defun vlf-update-buffer-name ()
-  "Update the current buffer name."
-  (rename-buffer (format "%s(%d/%d)[%s]"
-                         (file-name-nondirectory buffer-file-name)
-                         (/ vlf-end-pos vlf-batch-size)
-                         (/ vlf-file-size vlf-batch-size)
-                         (file-size-human-readable vlf-batch-size))
-                 t))
-
 (defmacro vlf-with-undo-disabled (&rest body)
   "Execute BODY with temporarily disabled undo."
   `(let ((undo-list buffer-undo-list))
@@ -87,9 +78,8 @@ FILE if given is filename to be used, otherwise `buffer-file-truename'."
      (unwind-protect (progn ,@body)
        (setq buffer-undo-list undo-list))))
 
-(defun vlf-move-to-chunk (start end &optional minimal)
+(defun vlf-move-to-chunk (start end)
   "Move to chunk enclosed by START END bytes.
-When given MINIMAL flag, skip non important operations.
 If same as current chunk is requested, do nothing.
 Return number of bytes moved back for proper decoding and number of
 bytes added to the end."
@@ -105,17 +95,13 @@ bytes added to the end."
                        0)))
           (setq vlf-start-pos place
                 vlf-end-pos place)
-          (or minimal (vlf-update-buffer-name))
           (cons (- start place) (- place end))))
     (if (derived-mode-p 'hexl-mode)
         (setq start (- start (mod start hexl-bits))
               end (+ end (- hexl-bits (mod end hexl-bits)))))
     (if (or (/= start vlf-start-pos)
             (/= end vlf-end-pos))
-        (let ((shifts (vlf-move-to-chunk-1 start end)))
-          (and shifts (not minimal)
-               (vlf-update-buffer-name))
-          shifts))))
+        (vlf-move-to-chunk-1 start end))))
 
 (defun vlf-move-to-chunk-1 (start end)
   "Move to chunk enclosed by START END keeping as much edits if any.

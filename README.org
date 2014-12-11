@@ -91,6 +91,12 @@ default.  Here's example how to add another prefix (*C-x v*):
     '(define-key vlf-prefix-map "\C-xv" vlf-mode-map))
 #+END_SRC
 
+** Overall position indicators
+
+To see which part of the file is currently visited and how many
+batches there are in overall (using the current batch size), look at
+the VLF section in the mode line, file size is also there.
+
 ** Batch size control
 
 By default *VLF* gathers statistics over how primitive operations
@@ -133,10 +139,7 @@ append prefix number of batches.
 *C-c C-v [* and *C-c C-v ]* take you to the beginning and end of file
 respectively.
 
-*C-c C-v j* jumps to given chunk.  To see where you are in file and
-how many chunks there are (using the current batch size), look at the
-parenthesized part of the buffer name, batch size is also indicated at
-the end.
+*C-c C-v j* jumps to particular batch number.
 
 ** Follow point
 

@@ -103,7 +103,11 @@ values are: `write', `ediff', `occur', `search', `goto-line'."
 
 (define-minor-mode vlf-mode
   "Mode to browse large files in."
-  :lighter " VLF" :group 'vlf :keymap vlf-prefix-map
+  :group 'vlf :keymap vlf-prefix-map
+  :lighter (:eval (format " VLF[%d/%d](%s)"
+                          (/ vlf-end-pos vlf-batch-size)
+                          (/ vlf-file-size vlf-batch-size)
+                          (file-size-human-readable vlf-file-size)))
   (cond (vlf-mode
          (set (make-local-variable 'require-final-newline) nil)
          (add-hook 'write-file-functions 'vlf-write nil t)
@@ -146,8 +150,7 @@ values are: `write', `ediff', `occur', `search', `goto-line'."
            (let ((pos (+ vlf-start-pos (position-bytes (point)))))
              (vlf-with-undo-disabled
               (insert-file-contents buffer-file-name t nil nil t))
-             (goto-char (byte-to-position pos))))
-         (rename-buffer (file-name-nondirectory buffer-file-name) t))
+             (goto-char (byte-to-position pos)))))
         (t (setq vlf-mode t))))
 
 (defun vlf-keep-alive ()
@@ -331,16 +334,15 @@ Ask for confirmation if NOCONFIRM is nil."
       (error "Save or discard your changes first")
     t))
 
-(defun vlf-move-to-batch (start &optional minimal)
+(defun vlf-move-to-batch (start)
   "Move to batch determined by START.
-Adjust according to file start/end and show `vlf-batch-size' bytes.
-When given MINIMAL flag, skip non important operations."
+Adjust according to file start/end and show `vlf-batch-size' bytes."
   (vlf-verify-size)
   (let* ((start (max 0 start))
          (end (min (+ start vlf-batch-size) vlf-file-size)))
     (if (= vlf-file-size end)          ; re-adjust start
         (setq start (max 0 (- end vlf-batch-size))))
-    (vlf-move-to-chunk start end minimal)))
+    (vlf-move-to-chunk start end)))
 
 (defun vlf-next-batch-from-point ()
   "Display batch of file data starting from current point."

@@ -58,8 +58,7 @@ If changing size of chunk, shift remaining file content."
                  (if hexl (vlf-tune-hexlify))
                  (setq vlf-file-size (vlf-get-file-size
                                       buffer-file-truename)
-                       vlf-end-pos vlf-file-size)
-                 (vlf-update-buffer-name))
+                       vlf-end-pos vlf-file-size))
         (let* ((region-length (vlf-tune-encode-length (point-min)
                                                       (point-max)))
                (size-change (- vlf-end-pos vlf-start-pos
@@ -99,7 +98,6 @@ If changing size of chunk, shift remaining file content."
                                           vlf-batch-size)
                                        (+ vlf-start-pos vlf-batch-size)
                                      vlf-end-pos))
-              (vlf-update-buffer-name)
               (goto-char pos)
               (message "Save took %f seconds" (- (float-time) time)))))))
     (run-hook-with-args 'vlf-after-batch-functions 'write))
