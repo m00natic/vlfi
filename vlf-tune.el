@@ -86,6 +86,8 @@ Avoid decreasing this after opening file with VLF."
 
 (defvar vlf-tune-encode-bps nil
   "Vector of bytes per second encode measurements.")
+(make-variable-buffer-local 'vlf-tune-encode-bps)
+(put 'vlf-tune-encode-bps 'permanent-local t)
 
 (defvar vlf-tune-write-bps nil
   "Vector of bytes per second write measurements.")
