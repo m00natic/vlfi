@@ -140,8 +140,11 @@ bytes added to the end."
               (if (consp hexl-undo-list)
                   (setq hexl-undo-list nil))
               (vlf-move-to-chunk-2 start end)))
-           ((or (and (<= start vlf-start-pos) (<= edit-end end))
-                (not modified)
+           ((and (not modified)
+                 (not (consp buffer-undo-list)))
+            (vlf-move-to-chunk-2 start end))
+           ((or (not modified)
+                (and (<= start vlf-start-pos) (<= edit-end end))
                 (y-or-n-p "Chunk modified, are you sure? "))
             (run-hooks 'vlf-before-chunk-update)
             (when (and hexl (not restore-hexl))
@@ -224,29 +227,40 @@ bytes added to the end."
 Return number of bytes moved back for proper decoding and number of
 bytes added to the end."
   (run-hooks 'vlf-before-chunk-update)
-  (vlf-verify-size t)
-  (setq vlf-start-pos (max 0 start)
-        vlf-end-pos (min end vlf-file-size))
-  (let ((shifts '(0 . 0)))
-    (let ((inhibit-read-only t)
-          (pos (position-bytes (point))))
-      (vlf-with-undo-disabled
-       (erase-buffer)
-       (if (derived-mode-p 'hexl-mode)
-           (progn (vlf-tune-insert-file-contents-literally
-                   vlf-start-pos vlf-end-pos)
-                  (vlf-tune-hexlify))
-         (setq shifts (vlf-insert-file-contents vlf-start-pos
-                                                vlf-end-pos t t)
-               vlf-start-pos (- vlf-start-pos (car shifts))
-               vlf-end-pos (+ vlf-end-pos (cdr shifts)))))
-      (goto-char (or (byte-to-position (+ pos (car shifts)))
-                     (point-max))))
-    (set-buffer-modified-p nil)
-    (or (eq buffer-undo-list t)
-        (setq buffer-undo-list nil))
-    (run-hooks 'vlf-after-chunk-update)
-    shifts))
+  (let ((adjust-start t)
+        (adjust-end t)
+        (is-hexl (derived-mode-p 'hexl-mode)))
+    (and (not is-hexl)
+         (verify-visited-file-modtime (current-buffer))
+         (setq adjust-start (and (/= start vlf-start-pos)
+                                 (/= start vlf-end-pos))
+               adjust-end (and (/= end vlf-start-pos)
+                               (/= end vlf-end-pos))))
+    (vlf-verify-size t)
+    (setq vlf-start-pos (max 0 start)
+          vlf-end-pos (min end vlf-file-size))
+    (let ((shifts '(0 . 0)))
+      (let ((inhibit-read-only t)
+            (pos (position-bytes (point))))
+        (vlf-with-undo-disabled
+         (erase-buffer)
+         (if is-hexl
+             (progn (vlf-tune-insert-file-contents-literally
+                     vlf-start-pos vlf-end-pos)
+                    (vlf-tune-hexlify))
+           (setq shifts (vlf-insert-file-contents vlf-start-pos
+                                                  vlf-end-pos
+                                                  adjust-start
+                                                  adjust-end)
+                 vlf-start-pos (- vlf-start-pos (car shifts))
+                 vlf-end-pos (+ vlf-end-pos (cdr shifts)))))
+        (goto-char (or (byte-to-position (+ pos (car shifts)))
+                       (point-max))))
+      (set-buffer-modified-p nil)
+      (or (eq buffer-undo-list t)
+          (setq buffer-undo-list nil))
+      (run-hooks 'vlf-after-chunk-update)
+      shifts)))
 
 (defun vlf-insert-file-contents (start end adjust-start adjust-end
                                        &optional position)
@@ -257,7 +271,7 @@ Use buffer POSITION as start if given.
 Return number of bytes moved back for proper decoding and number of
 bytes added to the end."
   (setq adjust-start (and adjust-start (not (zerop start)))
-        adjust-end (and adjust-end (< end vlf-file-size))
+        adjust-end (and adjust-end (/= end vlf-file-size))
         position (or position (point-min)))
   (goto-char position)
   (let ((shift-start 0)
