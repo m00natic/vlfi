@@ -256,19 +256,19 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                     (inhibit-read-only t))
                 (setq n (1- n))
                 (vlf-with-undo-disabled
-                 (while (and (< (- end start) n)
-                             (< n (- vlf-file-size start)))
-                   (erase-buffer)
-                   (vlf-tune-insert-file-contents-literally start end)
-                   (goto-char (point-min))
-                   (while (re-search-forward "[\n\C-m]" nil t)
-                     (setq n (1- n)))
-                   (vlf-verify-size)
-                   (vlf-tune-batch '(:raw))
-                   (setq start end
-                         end (min vlf-file-size (+ start
-                                                   vlf-batch-size)))
-                   (progress-reporter-update reporter start))
+                 ;; (while (and (< (- end start) n)
+                 ;;             (< n (- vlf-file-size start)))
+                 ;;   (erase-buffer)
+                 ;;   (vlf-tune-insert-file-contents-literally start end)
+                 ;;   (goto-char (point-min))
+                 ;;   (while (re-search-forward "[\n\C-m]" nil t)
+                 ;;     (setq n (1- n)))
+                 ;;   (vlf-verify-size)
+                 ;;   (vlf-tune-batch '(:raw))
+                 ;;   (setq start end
+                 ;;         end (min vlf-file-size (+ start
+                 ;;                                   vlf-batch-size)))
+                 ;;   (progress-reporter-update reporter start))
                  (when (< n (- vlf-file-size end))
                    (vlf-tune-batch '(:insert :encode))
                    (vlf-move-to-chunk-2 start (+ start vlf-batch-size))
@@ -278,8 +278,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                              (when (vlf-re-search "[\n\C-m]" n nil 0
                                                   reporter time)
                                (forward-char) t))))))
-            (let ((start (max 0 (- vlf-file-size vlf-batch-size)))
-                  (end vlf-file-size)
+            (let ((end vlf-file-size)
                   (reporter (make-progress-reporter
                              (concat "Searching for line -"
                                      (number-to-string n) "...")
@@ -287,17 +286,18 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                   (inhibit-read-only t))
               (setq n (- n))
               (vlf-with-undo-disabled
-               (while (and (< (- end start) n) (< n end))
-                 (erase-buffer)
-                 (vlf-tune-insert-file-contents-literally start end)
-                 (goto-char (point-max))
-                 (while (re-search-backward "[\n\C-m]" nil t)
-                   (setq n (1- n)))
-                 (vlf-tune-batch '(:raw))
-                 (setq end start
-                       start (max 0 (- end vlf-batch-size)))
-                 (progress-reporter-update reporter
-                                           (- vlf-file-size end)))
+               ;; (let ((start (max 0 (- vlf-file-size vlf-batch-size))))
+               ;;   (while (and (< (- end start) n) (< n end))
+               ;;     (erase-buffer)
+               ;;     (vlf-tune-insert-file-contents-literally start end)
+               ;;     (goto-char (point-max))
+               ;;     (while (re-search-backward "[\n\C-m]" nil t)
+               ;;       (setq n (1- n)))
+               ;;     (vlf-tune-batch '(:raw))
+               ;;     (setq end start
+               ;;           start (max 0 (- end vlf-batch-size)))
+               ;;     (progress-reporter-update reporter
+               ;;                               (- vlf-file-size end))))
                (when (< n end)
                  (vlf-tune-batch '(:insert :encode))
                  (vlf-move-to-chunk-2 (- end vlf-batch-size) end)
