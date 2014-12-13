@@ -140,14 +140,16 @@ values are: `write', `ediff', `occur', `search', `goto-line'."
                (if (consp buffer-undo-list)
                    (setq buffer-undo-list nil))
                (vlf-with-undo-disabled
-                (insert-file-contents-literally buffer-file-name
-                                                t nil nil t)
-                (hexlify-buffer))
+                (let ((inhibit-read-only t))
+                  (insert-file-contents-literally buffer-file-name
+                                                  t nil nil t)
+                  (hexlify-buffer)))
                (set-buffer-modified-p nil)
                (goto-char (point-min))
                (forward-line line)
                (forward-char pos))
-           (let ((pos (+ vlf-start-pos (position-bytes (point)))))
+           (let ((pos (+ vlf-start-pos (position-bytes (point))))
+                 (inhibit-read-only t))
              (vlf-with-undo-disabled
               (insert-file-contents buffer-file-name t nil nil t))
              (goto-char (byte-to-position pos)))))
