@@ -127,7 +127,10 @@ EVENT may hold details of the invocation."
               (match-pos (+ (get-text-property pos 'line-pos)
                             pos-relative)))
           (cond (current-prefix-arg
-                 (setq vlf-buffer (vlf file t))
+                 (let ((original-occur-buffer vlf-occur-vlf-buffer))
+                   (setq vlf-buffer (vlf file t))
+                   (if (buffer-live-p original-occur-buffer)
+                       (vlf-tune-copy-profile original-occur-buffer)))
                  (or not-hexl (hexl-mode))
                  (switch-to-buffer occur-buffer))
                 ((not (buffer-live-p vlf-buffer))
@@ -155,9 +158,7 @@ Prematurely ending indexing will still show what's found so far."
         (file buffer-file-name)
         (file-size vlf-file-size)
         (batch-size vlf-batch-size)
-        (is-hexl (derived-mode-p 'hexl-mode))
-        (insert-bps vlf-tune-insert-bps)
-        (insert-raw-bps vlf-tune-insert-raw-bps))
+        (is-hexl (derived-mode-p 'hexl-mode)))
     (with-temp-buffer
       (setq buffer-file-name file
             buffer-file-truename file
@@ -166,23 +167,16 @@ Prematurely ending indexing will still show what's found so far."
       (set-buffer-modified-p nil)
       (set (make-local-variable 'vlf-batch-size) batch-size)
       (when vlf-tune-enabled
-        (setq vlf-tune-insert-bps insert-bps)
-        (if is-hexl
-            (progn (setq vlf-tune-insert-raw-bps insert-raw-bps)
-                   (vlf-tune-batch '(:hexl :raw) t))
-          (vlf-tune-batch '(:insert :encode) t)))
+        (vlf-tune-copy-profile vlf-buffer)
+        (vlf-tune-batch (if is-hexl
+                            '(:hexl :raw)
+                          '(:insert :encode)) t))
       (vlf-mode 1)
       (if is-hexl (hexl-mode))
       (goto-char (point-min))
       (vlf-build-occur regexp vlf-buffer)
-      (when vlf-tune-enabled
-        (setq insert-bps vlf-tune-insert-bps)
-        (if is-hexl
-            (setq insert-raw-bps vlf-tune-insert-raw-bps))))
-    (when vlf-tune-enabled              ;merge back tune measurements
-      (setq vlf-tune-insert-bps insert-bps)
-      (if is-hexl
-          (setq vlf-tune-insert-raw-bps insert-raw-bps)))))
+      (if vlf-tune-enabled
+          (vlf-tune-copy-profile (current-buffer) vlf-buffer)))))
 
 (defun vlf-occur (regexp)
   "Make whole file occur style index for REGEXP.

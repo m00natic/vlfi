@@ -98,10 +98,28 @@ Avoid decreasing this after opening file with VLF."
 (defvar vlf-tune-dehexlify-bps nil
   "Vector of bytes per second dehexlify measurements.")
 
+(defvar vlf-start-pos)
 (defvar hexl-bits)
 (defvar hexl-max-address)
 (declare-function hexl-line-displen "hexl")
 (declare-function dehexlify-buffer "hexl")
+
+(defun vlf-tune-copy-profile (from-buffer &optional to-buffer)
+  "Copy specific profile vectors of FROM-BUFFER to TO-BUFFER.
+If TO-BUFFER is nil, copy to current buffer."
+  (let (insert-bps insert-raw-bps encode-bps)
+    (with-current-buffer from-buffer
+      (setq insert-bps vlf-tune-insert-bps
+            insert-raw-bps vlf-tune-insert-raw-bps
+            encode-bps vlf-tune-encode-bps))
+    (if to-buffer
+        (with-current-buffer to-buffer
+          (setq vlf-tune-insert-bps insert-bps
+                vlf-tune-insert-raw-bps insert-raw-bps
+                vlf-tune-encode-bps encode-bps))
+      (setq vlf-tune-insert-bps insert-bps
+            vlf-tune-insert-raw-bps insert-raw-bps
+            vlf-tune-encode-bps encode-bps))))
 
 (defun vlf-tune-closest-index (size)
   "Get closest measurement index corresponding to SIZE."
