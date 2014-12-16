@@ -307,8 +307,8 @@ Return number of bytes moved back for proper decoding."
          (strict (or (= sample-end vlf-file-size)
                      (and (not adjust-end) (= sample-end end))))
          (shift 0))
-    (while (and (progn (vlf-insert-file-contents-1 safe-start
-                                                   sample-end)
+    (while (and (progn (insert-file-contents buffer-file-name
+                                             nil safe-start sample-end)
                        (not (zerop safe-start)))
                 (< shift 3)
                 (let ((diff (- chunk-size

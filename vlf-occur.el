@@ -341,7 +341,8 @@ Prematurely ending indexing will still show what's found so far."
                               (vlf-tune-encode-length (point-min)
                                                       batch-point))))))
                   (vlf-tune-batch tune-types)
-                  (vlf-move-to-chunk start (+ start vlf-batch-size)))
+                  (setq vlf-end-pos start) ;not to adjust start
+                  (vlf-move-to-chunk-2 start (+ start vlf-batch-size)))
                 (setq match-start-point (point-min)
                       match-end-point match-start-point)
                 (goto-char match-end-point)
