@@ -50,6 +50,9 @@ Possible values are: nil to never use it;
   "Major modes which VLF will not be automatically applied to."
   :group 'vlf :type '(list symbol))
 
+(defvar dired-mode-map)
+(declare-function dired-get-file-for-visit "dired")
+
 (unless (fboundp 'file-size-human-readable)
   (defun file-size-human-readable (file-size)
     "Print FILE-SIZE in MB."
