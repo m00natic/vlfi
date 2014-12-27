@@ -199,7 +199,7 @@ FILE-NAME if given is to be used instead of `buffer-file-name'."
   (let ((pos (point))
         (address vlf-start-pos))
     (goto-char (point-min))
-    (while (re-search-forward "^[0-9a-f]+" nil t)
+    (while (re-search-forward "^[[:xdigit:]]+" nil t)
       (replace-match (format "%08x" address))
       (setq address (+ address hexl-bits)))
     (goto-char pos)))
