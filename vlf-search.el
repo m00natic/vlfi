@@ -32,10 +32,9 @@
 (defvar hexl-bits)
 (defvar tramp-verbose)
 
-(defun vlf-re-search (regexp count backward batch-step
+(defun vlf-re-search (regexp count backward
                              &optional reporter time highlight)
   "Search for REGEXP COUNT number of times forward or BACKWARD.
-BATCH-STEP is amount of overlap between successive chunks.
 Use existing REPORTER and start TIME if given.
 Highlight match if HIGHLIGHT is non nil.
 Return t if search has been at least partially successful."
@@ -54,8 +53,9 @@ Return t if search has been at least partially successful."
          (case-fold-search t)
          (match-chunk-start vlf-start-pos)
          (match-chunk-end vlf-end-pos)
-         (match-start-pos (+ vlf-start-pos (position-bytes (point))))
+         (match-start-pos (point))
          (match-end-pos match-start-pos)
+         (last-match-pos match-start-pos)
          (to-find count)
          (is-hexl (derived-mode-p 'hexl-mode))
          (tune-types (if is-hexl '(:hexl :raw)
@@ -68,71 +68,69 @@ Return t if search has been at least partially successful."
            (if backward
                (while (not (zerop to-find))
                  (cond ((re-search-backward regexp nil t)
-                        (setq match-end-pos (+ vlf-start-pos
-                                               (position-bytes
-                                                (match-end 0))))
-                        (if (/= match-start-pos match-end-pos)
-                            (setq to-find (1- to-find)
-                                  match-chunk-start vlf-start-pos
-                                  match-chunk-end vlf-end-pos
-                                  match-start-pos
-                                  (+ vlf-start-pos
-                                     (position-bytes
-                                      (match-beginning 0))))))
+                        (setq to-find (1- to-find)
+                              match-chunk-start vlf-start-pos
+                              match-chunk-end vlf-end-pos
+                              match-start-pos (match-beginning 0)
+                              match-end-pos (match-end 0)
+                              last-match-pos match-start-pos))
                        ((zerop vlf-start-pos)
                         (throw 'end-of-file nil))
-                       (t (vlf-tune-batch tune-types)
-                          (let* ((batch-move (+ vlf-start-pos
-                                                batch-step))
-                                 (end (if (or is-hexl
-                                              (<= batch-move
-                                                  match-start-pos))
-                                          batch-move
-                                        match-start-pos)))
+                       (t (let ((end
+                                 (if is-hexl
+                                     (progn
+                                       (goto-char (point-min))
+                                       (forward-line 10)
+                                       (if (< last-match-pos (point))
+                                           (goto-char last-match-pos))
+                                       (+ vlf-start-pos
+                                          (* (- 10 (forward-line -10))
+                                             hexl-bits)))
+                                   (vlf-byte-position
+                                    (min 1024 (/ (point-max) 10)
+                                         last-match-pos)))))
+                            (vlf-tune-batch tune-types)
+                            (setq vlf-start-pos end) ;don't adjust end
                             (vlf-move-to-chunk (- end vlf-batch-size)
                                                end))
-                          (goto-char (if (or is-hexl
-                                             (<= vlf-end-pos
-                                                 match-start-pos))
-                                         (point-max)
-                                       (or (byte-to-position
-                                            (- match-start-pos
-                                               vlf-start-pos))
-                                           (point-max))))
+                          (let ((pmax (point-max)))
+                            (goto-char pmax)
+                            (setq last-match-pos pmax))
                           (progress-reporter-update
                            reporter (- vlf-file-size
                                        vlf-start-pos)))))
              (while (not (zerop to-find))
                (cond ((re-search-forward regexp nil t)
-                      (setq match-start-pos (+ vlf-start-pos
-                                               (position-bytes
-                                                (match-beginning 0))))
-                      (if (/= match-start-pos match-end-pos)
-                          (setq to-find (1- to-find)
-                                match-chunk-start vlf-start-pos
-                                match-chunk-end vlf-end-pos
-                                match-end-pos (+ vlf-start-pos
-                                                 (position-bytes
-                                                  (match-end 0))))))
+                      (setq to-find (1- to-find)
+                            match-chunk-start vlf-start-pos
+                            match-chunk-end vlf-end-pos
+                            match-start-pos (match-beginning 0)
+                            match-end-pos (match-end 0)
+                            last-match-pos match-end-pos))
                      ((>= vlf-end-pos vlf-file-size)
                       (throw 'end-of-file nil))
-                     (t (vlf-tune-batch tune-types)
-                        (let* ((batch-move (- vlf-end-pos batch-step))
-                               (start (if (or is-hexl
-                                              (< match-end-pos
-                                                 batch-move))
-                                          batch-move
-                                        match-end-pos)))
-                          (vlf-move-to-chunk start
-                                             (+ start vlf-batch-size)))
-                        (goto-char (if (or is-hexl
-                                           (<= match-end-pos
-                                               vlf-start-pos))
-                                       (point-min)
-                                     (or (byte-to-position
-                                          (- match-end-pos
-                                             vlf-start-pos))
-                                         (point-min))))
+                     (t (let* ((pmax (point-max))
+                               (start
+                                (if is-hexl
+                                    (progn
+                                      (goto-char pmax)
+                                      (forward-line -10)
+                                      (if (< (point) last-match-pos)
+                                          (goto-char last-match-pos))
+                                      (- vlf-end-pos
+                                         (* (- 10 (forward-line 10))
+                                            hexl-bits)))
+                                  (vlf-byte-position
+                                   (max (- pmax 1024)
+                                        (- pmax (/ pmax 10))
+                                        last-match-pos)))))
+                          (vlf-tune-batch tune-types)
+                          (setq vlf-end-pos start) ;don't adjust start
+                          (vlf-move-to-chunk start (+ start
+                                                      vlf-batch-size)))
+                        (let ((pmin (point-min)))
+                          (goto-char pmin)
+                          (setq last-match-pos pmin))
                         (progress-reporter-update reporter
                                                   vlf-end-pos)))))
            (progress-reporter-done reporter))
@@ -150,49 +148,36 @@ Return t if search has been at least partially successful."
          result)))))
 
 (defun vlf-goto-match (match-chunk-start match-chunk-end
-                                         match-pos-start match-pos-end
+                                         match-start-pos match-end-pos
                                          count to-find time
                                          highlight)
   "Move to MATCH-CHUNK-START MATCH-CHUNK-END surrounding\
-MATCH-POS-START and MATCH-POS-END.
+MATCH-START-POS and MATCH-END-POS.
 According to COUNT and left TO-FIND, show if search has been
 successful.  Use start TIME to report how much it took.
 Highlight match if HIGHLIGHT is non nil.
 Return nil if nothing found."
+  (vlf-move-to-chunk match-chunk-start match-chunk-end)
+  (goto-char match-start-pos)
+  (setq vlf-batch-size (vlf-tune-optimal-load
+                        (if (derived-mode-p 'hexl-mode)
+                            '(:hexl :raw)
+                          '(:insert :encode))))
   (if (= count to-find)
-      (progn (vlf-move-to-chunk match-chunk-start match-chunk-end)
-             (goto-char (or (byte-to-position (- match-pos-start
-                                                 vlf-start-pos))
-                            (point-max)))
-             (message "Not found (%f secs)" (- (float-time) time))
+      (progn (message "Not found (%f secs)" (- (float-time) time))
              nil)
-    (let ((success (zerop to-find)))
-      (or success
-          (vlf-move-to-chunk match-chunk-start match-chunk-end))
-      (setq vlf-batch-size (vlf-tune-optimal-load
-                            (if (derived-mode-p 'hexl-mode)
-                                '(:hexl :raw)
-                              '(:insert :encode))))
-      (let* ((match-end (or (byte-to-position (- match-pos-end
-                                                 vlf-start-pos))
-                            (point-max)))
-             (overlay (make-overlay (byte-to-position
-                                     (- match-pos-start
-                                        vlf-start-pos))
-                                    match-end)))
-        (overlay-put overlay 'face 'match)
-        (if success
-            (message "Match found (%f secs)" (- (float-time) time))
-          (message "Moved to the %d match which is last (%f secs)"
-                   (- count to-find) (- (float-time) time)))
-        (goto-char (or (byte-to-position (- match-pos-start
-                                            vlf-start-pos))
-                       (point-max)))
-        (if highlight
-            (unwind-protect (sit-for 1)
-              (delete-overlay overlay))
-          (delete-overlay overlay))
-        t))))
+    (let ((success (zerop to-find))
+          (overlay (make-overlay match-start-pos match-end-pos)))
+      (overlay-put overlay 'face 'match)
+      (if success
+          (message "Match found (%f secs)" (- (float-time) time))
+        (message "Moved to the %d match which is last (%f secs)"
+                 (- count to-find) (- (float-time) time)))
+      (if highlight
+          (unwind-protect (sit-for 1)
+            (delete-overlay overlay))
+        (delete-overlay overlay)))
+    t))
 
 (defun vlf-re-search-forward (regexp count)
   "Search forward for REGEXP prefix COUNT number of times.
@@ -205,9 +190,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
   (let ((batch-size vlf-batch-size)
         success)
     (unwind-protect
-        (setq success (vlf-re-search regexp count nil
-                                     (min 1024 (/ vlf-batch-size 8))
-                                     nil nil t))
+        (setq success (vlf-re-search regexp count nil nil nil t))
       (or success (setq vlf-batch-size batch-size)))))
 
 (defun vlf-re-search-backward (regexp count)
@@ -221,9 +204,7 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
   (let ((batch-size vlf-batch-size)
         success)
     (unwind-protect
-        (setq success (vlf-re-search regexp count t
-                                     (min 1024 (/ vlf-batch-size 8))
-                                     nil nil t))
+        (setq success (vlf-re-search regexp count t nil nil t))
       (or success (setq vlf-batch-size batch-size)))))
 
 (defun vlf-goto-line (n)
@@ -271,11 +252,11 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                  ;;   (progress-reporter-update reporter start))
                  (when (< n (- vlf-file-size end))
                    (vlf-tune-batch '(:insert :encode))
-                   (vlf-move-to-chunk-2 start (+ start vlf-batch-size))
+                   (vlf-move-to-chunk start (+ start vlf-batch-size))
                    (goto-char (point-min))
                    (setq success
                          (or (zerop n)
-                             (when (vlf-re-search "[\n\C-m]" n nil 0
+                             (when (vlf-re-search "[\n\C-m]" n nil
                                                   reporter time)
                                (forward-char) t))))))
             (let ((end vlf-file-size)
@@ -300,14 +281,14 @@ Search is performed chunk by chunk in `vlf-batch-size' memory."
                ;;                               (- vlf-file-size end))))
                (when (< n end)
                  (vlf-tune-batch '(:insert :encode))
-                 (vlf-move-to-chunk-2 (- end vlf-batch-size) end)
+                 (vlf-move-to-chunk (- end vlf-batch-size) end)
                  (goto-char (point-max))
-                 (setq success (vlf-re-search "[\n\C-m]" n t 0
+                 (setq success (vlf-re-search "[\n\C-m]" n t
                                               reporter time))))))
         (if font-lock (font-lock-mode 1))
         (unless success
           (vlf-with-undo-disabled
-           (vlf-move-to-chunk-2 start-pos end-pos))
+           (vlf-move-to-chunk start-pos end-pos))
           (goto-char pos)
           (setq vlf-batch-size batch-size)
           (message "Unable to find line"))
@@ -353,15 +334,13 @@ replace BACKWARD."
                  (list (nth 0 common) (nth 1 common) (nth 2 common)
                        (nth 3 common))))
   (let ((not-automatic t))
-    (while (vlf-re-search regexp 1 backward
-                          (min 1024 (/ vlf-batch-size 8)))
+    (while (vlf-re-search regexp 1 backward)
       (cond (not-automatic
              (query-replace-regexp regexp to-string delimited
                                    nil nil backward)
-             (setq not-automatic
-                   (not (eq (lookup-key query-replace-map
-                                        (vector last-input-event))
-                            'automatic))))
+             (if (eq 'automatic (lookup-key query-replace-map
+                                            (vector last-input-event)))
+                 (setq not-automatic nil)))
             (backward (while (re-search-backward regexp nil t)
                         (replace-match to-string)))
             (t (while (re-search-forward regexp nil t)
