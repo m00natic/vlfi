@@ -309,7 +309,8 @@ Prematurely ending indexing will still show what's found so far."
                                                          match-end-point)))))
                              (- vlf-end-pos (* (- 10 (forward-line 10))
                                                hexl-bits)))
-                         (let* ((batch-step (min 1024 (/ vlf-batch-size
+                         (let* ((pmax (point-max))
+                                (batch-step (min 1024 (/ vlf-batch-size
                                                          10)))
                                 (batch-point
                                  (max match-end-point
@@ -317,7 +318,7 @@ Prematurely ending indexing will still show what's found so far."
                                        (byte-to-position
                                         (- vlf-batch-size batch-step))
                                        (progn
-                                         (goto-char (point-max))
+                                         (goto-char pmax)
                                          (let ((last (line-beginning-position)))
                                            (if (= last (point-min))
                                                (1- (point))
@@ -334,15 +335,12 @@ Prematurely ending indexing will still show what's found so far."
                            (goto-char match-end-point)
                            (forward-line)
                            (setq first-line-incomplete
-                                 (let ((pmax (point-max)))
-                                   (if (= (point) pmax)
-                                       (- pmax match-end-point))))
-                           (+ vlf-start-pos
-                              (vlf-tune-encode-length (point-min)
-                                                      batch-point))))))
+                                 (if (= (point) pmax)
+                                     (- pmax match-end-point)))
+                           (vlf-byte-position batch-point)))))
                   (vlf-tune-batch tune-types)
                   (setq vlf-end-pos start) ;not to adjust start
-                  (vlf-move-to-chunk-2 start (+ start vlf-batch-size)))
+                  (vlf-move-to-chunk start (+ start vlf-batch-size)))
                 (setq match-start-point (point-min)
                       match-end-point match-start-point)
                 (goto-char match-end-point)

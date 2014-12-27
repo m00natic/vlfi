@@ -375,6 +375,14 @@ which deletion was performed."
        (delete-region cut-point (point-max))))
     (cons dist (1+ cut-point))))
 
+(defun vlf-byte-position (point)
+  "Determine global byte position of POINT."
+  (let ((pmax (point-max)))
+    (if (< (/ pmax 2) point)
+        (- vlf-end-pos (vlf-tune-encode-length (min (1+ point) pmax)
+                                               pmax))
+      (+ vlf-start-pos (vlf-tune-encode-length (point-min) point)))))
+
 (defun vlf-shift-undo-list (n)
   "Shift undo list element regions by N."
   (or (null buffer-undo-list) (eq buffer-undo-list t)
