@@ -52,7 +52,7 @@ integer value).
 To have *vlf* offered as choice when opening large files:
 
 #+BEGIN_SRC emacs-lisp
-  (require 'vlf-integrate)
+  (require 'vlf-setup)
 #+END_SRC
 
 You can control when *vlf-mode* is invoked or offered with the

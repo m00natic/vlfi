@@ -1,6 +1,6 @@
-;;; vlf-integrate.el --- VLF integration with other packages  -*- lexical-binding: t -*-
+;;; vlf-setup.el --- VLF integration with other packages  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2014 Free Software Foundation, Inc.
+;; Copyright (C) 2014-2015 Free Software Foundation, Inc.
 
 ;; Keywords: large files, integration
 ;; Author: Andrey Kotlarski <m00naticus@gmail.com>
@@ -155,6 +155,6 @@ defined in FILE."
 (eval-after-load "dired"
   '(define-key dired-mode-map "V" 'dired-vlf))
 
-(provide 'vlf-integrate)
+(provide 'vlf-setup)
 
-;;; vlf-integrate.el ends here
+;;; vlf-setup.el ends here
