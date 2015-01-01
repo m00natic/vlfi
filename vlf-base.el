@@ -1,6 +1,6 @@
 ;;; vlf-base.el --- VLF primitive operations  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2014 Free Software Foundation, Inc.
+;; Copyright (C) 2014-2015 Free Software Foundation, Inc.
 
 ;; Keywords: large files, chunk
 ;; Author: Andrey Kotlarski <m00naticus@gmail.com>
@@ -29,11 +29,11 @@
 
 (require 'vlf-tune)
 
-(defcustom vlf-before-chunk-update nil
+(defcustom vlf-before-chunk-update-hook nil
   "Hook that runs before chunk update."
   :group 'vlf :type 'hook)
 
-(defcustom vlf-after-chunk-update nil
+(defcustom vlf-after-chunk-update-hook nil
   "Hook that runs after chunk update."
   :group 'vlf :type 'hook)
 
@@ -146,7 +146,7 @@ bytes added to the end."
            ((or (not modified)
                 (and (<= start vlf-start-pos) (<= edit-end end))
                 (y-or-n-p "Chunk modified, are you sure? "))
-            (run-hooks 'vlf-before-chunk-update)
+            (run-hooks 'vlf-before-chunk-update-hook)
             (when (and hexl (not restore-hexl))
               (if (consp buffer-undo-list)
                   (setq buffer-undo-list nil))
@@ -215,7 +215,7 @@ bytes added to the end."
               (when hexl
                 (vlf-tune-hexlify)
                 (setq restore-hexl nil))
-              (run-hooks 'vlf-after-chunk-update)
+              (run-hooks 'vlf-after-chunk-update-hook)
               (cons shift-start shift-end))))))
     (when restore-hexl
       (vlf-tune-hexlify)
@@ -226,7 +226,7 @@ bytes added to the end."
   "Unconditionally move to chunk enclosed by START END bytes.
 Return number of bytes moved back for proper decoding and number of
 bytes added to the end."
-  (run-hooks 'vlf-before-chunk-update)
+  (run-hooks 'vlf-before-chunk-update-hook)
   (let ((adjust-start t)
         (adjust-end t)
         (is-hexl (derived-mode-p 'hexl-mode)))
@@ -259,7 +259,7 @@ bytes added to the end."
       (set-buffer-modified-p nil)
       (or (eq buffer-undo-list t)
           (setq buffer-undo-list nil))
-      (run-hooks 'vlf-after-chunk-update)
+      (run-hooks 'vlf-after-chunk-update-hook)
       shifts)))
 
 (defun vlf-insert-file-contents (start end adjust-start adjust-end

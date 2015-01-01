@@ -189,7 +189,7 @@ first one.
 ** Move hooks
 
 A couple of hooks are run whenever updating chunk:
-*vlf-before-chunk-update* and *vlf-after-chunk-update*.
+*vlf-before-chunk-update-hook* and *vlf-after-chunk-update-hook*.
 
 ** Batch move hooks
 
