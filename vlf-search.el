@@ -140,10 +140,10 @@ Return t if search has been at least partially successful."
        (let ((result
               (if backward
                   (vlf-goto-match match-chunk-start match-chunk-end
-                                  match-end-pos match-start-pos
+                                  match-start-pos match-end-pos
                                   count to-find time highlight)
                 (vlf-goto-match match-chunk-start match-chunk-end
-                                match-start-pos match-end-pos
+                                match-end-pos match-start-pos
                                 count to-find time highlight))))
          (run-hook-with-args 'vlf-after-batch-functions 'search)
          result)))))
