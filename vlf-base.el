@@ -1,6 +1,6 @@
 ;;; vlf-base.el --- VLF primitive operations  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2014-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2014-2017 Free Software Foundation, Inc.
 
 ;; Keywords: large files, chunk
 ;; Author: Andrey Kotlarski <m00naticus@gmail.com>
@@ -270,9 +270,11 @@ to the beginning, ADJUST-END - append to the end.
 Use buffer POSITION as start if given.
 Return number of bytes moved back for proper decoding and number of
 bytes added to the end."
-  (setq adjust-start (and adjust-start (not (zerop start)))
-        adjust-end (and adjust-end (/= end vlf-file-size))
+  (setq adjust-end (and adjust-end (/= end vlf-file-size))
         position (or position (point-min)))
+  (and adjust-start (<= start 4)
+       (setq adjust-start nil
+             start 0))
   (goto-char position)
   (let ((shift-start 0)
         (shift-end 0)
@@ -294,7 +296,10 @@ bytes added to the end."
 
 (defun vlf-insert-file-contents-1 (start end)
   "Extract decoded file bytes START to END."
-  (vlf-tune-insert-file-contents start end))
+  (if (zerop start)
+      (vlf-tune-insert-file-contents start end)
+    (let ((coding-system-for-read buffer-file-coding-system))
+      (vlf-tune-insert-file-contents start end))))
 
 (defun vlf-adjust-start (start end position adjust-end)
   "Adjust chunk beginning at absolute START to END till content can\
@@ -307,9 +312,10 @@ Return number of bytes moved back for proper decoding."
          (strict (or (= sample-end vlf-file-size)
                      (and (not adjust-end) (= sample-end end))))
          (shift 0))
-    (while (and (progn (insert-file-contents buffer-file-name
-                                             nil safe-start sample-end)
-                       (not (zerop safe-start)))
+    (while (and (let ((coding-system-for-read buffer-file-coding-system))
+                  (insert-file-contents buffer-file-name
+                                        nil safe-start sample-end)
+                  (not (zerop safe-start)))
                 (< shift 3)
                 (let ((diff (- chunk-size
                                (length
