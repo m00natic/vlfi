@@ -53,6 +53,10 @@ One argument is supplied that specifies current action.  Possible
 values are: `write', `ediff', `occur', `search', `goto-line'."
   :group 'vlf :type 'hook)
 
+(defcustom vlf-batch-size-remote 1024
+  "Defines size (in bytes) of a batch of file data when accessed remotely."
+  :group 'vlf :type 'integer)
+
 (defvar hexl-bits)
 
 (autoload 'vlf-write "vlf-write" "Write current chunk to file." t)
@@ -172,8 +176,10 @@ Return newly created buffer."
     (set-buffer vlf-buffer)
     (set-visited-file-name file)
     (set-buffer-modified-p nil)
-    (if (or minimal (file-remote-p file))
-        (set (make-local-variable 'vlf-batch-size) 1024))
+    (cond (minimal
+           (set (make-local-variable 'vlf-batch-size) 1024))
+          ((file-remote-p file)
+           (set (make-local-variable 'vlf-batch-size) vlf-batch-size-remote)))
     (vlf-mode 1)
     (when minimal                 ;restore batch size to default value
       (kill-local-variable 'vlf-batch-size)
