@@ -109,8 +109,8 @@ values are: `write', `ediff', `occur', `search', `goto-line'."
   "Mode to browse large files in."
   :group 'vlf :keymap vlf-prefix-map
   :lighter (:eval (format " VLF[%d/%d](%s)"
-                          (/ vlf-end-pos vlf-batch-size)
-                          (/ vlf-file-size vlf-batch-size)
+                          (ceiling vlf-end-pos vlf-batch-size)
+                          (ceiling vlf-file-size vlf-batch-size)
                           (file-size-human-readable vlf-file-size)))
   (cond (vlf-mode
          (set (make-local-variable 'require-final-newline) nil)
