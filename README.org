@@ -7,7 +7,7 @@ for operations on the file.  This way multiple large files (like
 terabytes or whatever) can be instantly and simultaneously accessed
 without swapping and degraded performance.
 
-This is development version of the GNU ELPA [[http://elpa.gnu.org/packages/vlf][VLF]] package.  Here's what
+This is development version of the GNU ELPA [[https://elpa.gnu.org/packages/vlf.html][VLF]] package.  Here's what
 it offers in a nutshell:
 
 - automatic adjustment of batch size for optimal performance and
