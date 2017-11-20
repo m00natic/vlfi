@@ -19,7 +19,9 @@ it offers in a nutshell:
 - chunk editing (save is immediate if size hasn't changed, done in
   constant memory determined by current batch size otherwise)
 - options to jump to beginning, end or arbitrary file chunk
-- smooth integration with [[http://www.emacswiki.org/emacs/HexlMode][hexl-mode]]
+- proper dealing with multibyte encodings
+- smooth integration with [[http://www.emacswiki.org/emacs/HexlMode][hexl-mode]], just turn it on and the HEX
+  editing will work in batches just the same
 - works with [[http://www.emacswiki.org/emacs/TrampMode][TRAMP]] so accessing network files is fine and quick
 - newly added content is acknowledged if file has changed size
   meanwhile
