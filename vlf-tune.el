@@ -60,7 +60,9 @@ but don't change batch size.  If t, measure and change."
                                (if ram-size
                                    (/ ram-size 20)
                                  0))
-                             large-file-warning-threshold)
+                             (if large-file-warning-threshold
+                                 large-file-warning-threshold
+                               0))
   "Maximum batch size in bytes when auto tuning.
 Avoid increasing this after opening file with VLF."
   :group 'vlf :type 'integer)
