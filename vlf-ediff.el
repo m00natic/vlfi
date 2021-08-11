@@ -86,7 +86,7 @@ respectively of difference list, runs ediff over the adjacent chunks."
                                            ediff-last-dir-B
                                          (file-name-directory f)))
                                  (progn
-                                   (ediff-add-to-history
+                                   (add-to-history
                                     'file-name-history
                                     (ediff-abbreviate-file-name
                                      (expand-file-name
